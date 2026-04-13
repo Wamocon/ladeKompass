@@ -196,21 +196,21 @@ describe("validateRouteInput — valid input", () => {
   });
 
   it("defaults startName from coords when missing", () => {
-    const { startName, ...rest } = VALID_INPUT;
+    const { startName: _startName, ...rest } = VALID_INPUT;
     const result = validateRouteInput(rest);
     expect(result.errors).toBeNull();
     if (!result.data) throw new Error("Expected data");
     expect(result.data.startName).toContain("52.52");
   });
   it("defaults endName from coords when missing", () => {
-    const { endName, ...rest } = VALID_INPUT;
+    const { endName: _endName, ...rest } = VALID_INPUT;
     const result = validateRouteInput(rest);
     expect(result.errors).toBeNull();
     if (!result.data) throw new Error();
     expect(result.data.endName).toContain("48.137");
   });
   it("defaults minArrivalSocPercent to 10 when not provided", () => {
-    const { minArrivalSocPercent, ...rest } = VALID_INPUT;
+    const { endName: _endName, minArrivalSocPercent: _minSoc, ...rest } = VALID_INPUT;
     const result = validateRouteInput(rest);
     expect(result.errors).toBeNull();
     if (!result.data) throw new Error("Expected data");
@@ -360,7 +360,7 @@ describe("validateReportPayload — invalid input", () => {
   });
 
   it("rejects missing stationId", () => {
-    const { stationId, ...rest } = VALID_REPORT;
+    const { stationId: _sid, ...rest } = VALID_REPORT;
     const result = validateReportPayload(rest);
     expect(result.data).toBeNull();
     expect(result.errors?.some((e) => e.field === "stationId")).toBe(true);

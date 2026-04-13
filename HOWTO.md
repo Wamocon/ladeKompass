@@ -118,6 +118,93 @@ git push origin feature/mein-feature
 
 ---
 
+### 2c. API-Keys für LadeKompass einrichten
+
+LadeKompass benötigt externe API-Schlüssel für Kernfunktionen. Alle Keys sind **kostenlos verfügbar**.
+
+---
+
+#### 🔌 Open Charge Map (OCM) — Ladesäulen-Daten [PFLICHT]
+
+**Wofür:** Alle Ladesäulen auf der Karte (Weltweit, DE-Netz, Bundesnetzagentur-Daten)
+
+**Ohne Key:** max. ~10 Anfragen/Minute — führt bei normaler Nutzung zu `502`-Fehlern  
+**Mit Key:** 1.000+ Anfragen/Minute — kostenfrei
+
+**Schritte:**
+1. Gehe zu [openchargemap.org/site/develop/api](https://openchargemap.org/site/develop/api)
+2. Klicke auf **"Register / Login"** (oben rechts)
+3. Konto erstellen (E-Mail + Passwort)
+4. Nach dem Login: **"My Profile" → "API Key"** → Key kopieren
+5. Trage ihn in `.env.local` ein:
+   ```
+   OCM_API_KEY=dein-key-hier
+   ```
+
+> ℹ️ Die OCM-Datenbank enthält auch die **Daten der Bundesnetzagentur** (Ladesäulenregister), da die BNetzA ihre Daten an OCM liefert. Ein separater BNetzA-Key ist nicht nötig — die Bundesnetzagentur bietet keine öffentliche Echtzeit-API an.
+
+---
+
+#### 🏢 Bundesnetzagentur Ladesäulenregister — Direktdownload (optional)
+
+**Wofür:** Offizielle Rohdaten des BNetzA-Registers als CSV/Excel für eigene Analysen
+
+**Kein Key nötig** — öffentlich zugänglich
+
+**Download:** [bundesnetzagentur.de → Ladesäulenregister](https://www.bundesnetzagentur.de/DE/Fachthemen/ElektrizitaetundGas/E-Mobilitaet/Ladesaeulenkarte/start.html)
+
+Direct-Link CSV: `https://bundesnetzagentur.de/SharedDocs/Downloads/DE/Sachgebiete/Energie/Unternehmen_Institutionen/E_Mobilitaet/Ladesaeulenregister.xlsx`
+
+> ℹ️ Für die Live-Karte in LadeKompass wird OCM verwendet (enthält BNetzA-Daten). Der Direktdownload ist nur nötig, wenn du eigene Offline-Analysen machen möchtest.
+
+---
+
+#### 💳 Chargeprice API — Tarifvergleich (optional, Lite+)
+
+**Wofür:** Echtzeit-Tarifvergleich (Preise pro kWh von EnBW, ionity, etc.)
+
+**Schritte:**
+1. Gehe zu [chargeprice.app](https://www.chargeprice.app)
+2. Schreibe eine E-Mail an: `info@chargeprice.app`  
+   Betreff: "API Access Request — Open Source / Non-Profit"
+3. Erkläre kurz das Projekt (LadeKompass, nicht-kommerziell / Bildungsprojekt)
+4. Du erhältst einen kostenlosen API-Testkey
+
+> ℹ️ Ohne Chargeprice-Key funktioniert der Tarifvergleich nur mit Community-Meldungen. Die Hauptfunktionen der App sind davon nicht betroffen.
+
+---
+
+#### 🗺️ Supabase Auth & Datenbank [PFLICHT für Login/Dashboard]
+
+Erklärt in **Abschnitt 2** oben. Kurzfassung:
+1. [supabase.com](https://supabase.com) → Neues Projekt erstellen (Free Tier: ausreichend)
+2. **Project Settings → API** → URL + Anon Key + Service Role Key kopieren
+3. In `.env.local` eintragen
+
+**Warum die App ohne Supabase trotzdem läuft:**  
+Die Karte und Routenplanung funktionieren auch ohne Supabase. Fehler wie  
+`Your project's URL and API key are required` erscheinen nur im Login-Flow — solange kein Supabase verbunden ist, werden Auth-Seiten angezeigt aber Store-Operationen schlagen still fehl.
+
+---
+
+#### Vollständige `.env.local` nach Setup:
+
+```bash
+# Pflicht-Keys
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+SUPABASE_DB_SCHEMA=public
+NEXT_PUBLIC_SUPABASE_SCHEMA=public
+OCM_API_KEY=dein-ocm-key
+
+# Optional
+# CHARGEPRICE_API_KEY=...
+# RESEND_API_KEY=...
+```
+
+---
+
 ### 2b. Lokales Supabase Setup via Docker (Optional)
 
 > 💡 **Dieser Schritt ist optional.** Standardmäßig verbindest du dich direkt mit einem Remote-Supabase-Projekt (siehe Abschnitt 2). Nur wenn du lieber vollständig lokal entwickelst, ohne Internetverbindung zu Supabase, verwende dieses Setup.

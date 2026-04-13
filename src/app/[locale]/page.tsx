@@ -22,6 +22,6 @@ export default async function LocaleEntryPage({ params }: PageProps) {
     // Supabase not yet configured – fall through to guest redirect
   }
 
-  // Guest: redirect to the map
-  redirect(`/${locale}/map`);
+  // Guest: redirect to the dashboard
+  redirect(`/${locale}/dashboard`);
 }

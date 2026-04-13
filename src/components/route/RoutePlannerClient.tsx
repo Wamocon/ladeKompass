@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { RouteResult } from "@/lib/actions/route";
 
 const RoutePlanner = dynamic(
   () => import("./RoutePlanner").then((m) => m.RoutePlanner),

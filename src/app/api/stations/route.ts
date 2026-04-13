@@ -91,10 +91,19 @@ export async function GET(request: NextRequest) {
       next: { revalidate: 300 }, // cache 5 minutes
       headers: {
         "User-Agent": "LadeKompass/1.0 (info@wamocon.com)",
+        "Accept": "application/json",
       },
     });
 
+    if (res.status === 429) {
+      return NextResponse.json(
+        { error: "Rate limit reached. Please add an OCM_API_KEY to .env.local for higher limits.", code: "RATE_LIMITED" },
+        { status: 429 },
+      );
+    }
+
     if (!res.ok) {
+      console.error(`OCM API error: HTTP ${res.status} for URL: ${OCM_BASE}?${params.toString()}`);
       return NextResponse.json(
         { error: "OCM API request failed", status: res.status },
         { status: 502 },

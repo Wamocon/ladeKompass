@@ -59,7 +59,9 @@
     "adhoc_hint": "This station supports ad-hoc payment by credit card or NFC directly at the terminal – no app required.",
     "no_tariff_data": "No tariff data available",
     "last_reported": "Last reported: {time}",
-    "report_confirm_count": "{count} confirmations"
+    "report_confirm_count": "{count} confirmations",
+    "detail_heading": "Station Details",
+    "full_page_hint": "This page shows full station details. Open a station on the map for the interactive view."
   },
   "report": {
     "title": "Submit Report",
@@ -113,7 +115,27 @@
     "limit_reached": "Monthly route limit reached. Upgrade for more routes.",
     "upgrade_prompt": "Route planning requires a free account.",
     "distance_km": "{distance} km",
-    "duration_min": "approx. {duration} min"
+    "duration_min": "approx. {duration} min",
+    "subtitle": "Plan your long-distance trip with automatic charging stops — based on your battery.",
+    "validation_error": "Please fill in all fields correctly.",
+    "quota_exceeded": "Monthly route limit reached. Upgrade for unlimited routes.",
+    "start": "Start",
+    "destination": "Destination",
+    "place_name": "Place name (optional)",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "vehicle_params": "Vehicle Parameters",
+    "battery_kwh": "Battery (kWh)",
+    "current_soc": "Current SoC %",
+    "min_arrival_soc": "Min. Arrival %",
+    "distance": "Distance",
+    "duration": "Duration",
+    "minutes": "min",
+    "est_cost": "Charging Cost",
+    "route_steps": "Route",
+    "start_badge": "Start",
+    "end_badge": "Destination",
+    "no_stop_needed": "No charging stop needed — you will reach your destination with sufficient battery."
   },
   "vehicle": {
     "title": "Vehicle Profile",
@@ -131,7 +153,16 @@
     "cancel": "Cancel",
     "delete_confirm": "Really delete this vehicle?",
     "no_vehicles": "No vehicles added yet.",
-    "default_badge": "Default"
+    "default_badge": "Default",
+    "add_vehicle": "Add Vehicle",
+    "name": "Name",
+    "name_placeholder": "e.g. My Tesla",
+    "brand": "Brand",
+    "model": "Model",
+    "battery_kwh": "Battery Size (kWh)",
+    "max_charge_kw": "Charging Power (kW)",
+    "connector_type": "Connector Type",
+    "set_default": "Set as default vehicle"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -144,7 +175,15 @@
     "no_nearby": "No recent reports nearby.",
     "news_feed_title": "News & Community",
     "news_feed_empty": "No news available.",
-    "pro_required": "Live news feed available from Pro plan"
+    "pro_required": "Live news feed available from Pro plan",
+    "subtitle": "Your personal LadeKompass overview.",
+    "welcome_name": "Hello, {name}",
+    "quick_map": "Map",
+    "quick_map_desc": "Find charging stations nearby",
+    "quick_route": "Route Planner",
+    "quick_route_desc": "Plan long-distance trips with charging stops",
+    "quick_vehicles": "Vehicles",
+    "quick_vehicles_desc": "Manage vehicle profiles"
   },
   "news_feed": {
     "type_community": "Community",
@@ -153,7 +192,18 @@
     "just_now": "Just now",
     "minutes_ago": "{n} min. ago",
     "hours_ago": "{n} h ago",
-    "live": "Live"
+    "live": "Live",
+    "title": "Community Feed",
+    "empty": "No reports yet. Be the first!",
+    "load_more": "Load more",
+    "status_changed": "Status changed",
+    "type_community_report": "Community Report",
+    "type_station_status_change": "Status Change",
+    "report_available": "Available",
+    "report_occupied": "Occupied",
+    "report_defect": "Defect",
+    "report_price": "Price Correction",
+    "report_other": "Other Report"
   },
   "auth": {
     "login_title": "Sign In",
@@ -191,7 +241,9 @@
     "dsgvo_export": "Export My Data",
     "dsgvo_delete": "Delete Account",
     "dsgvo_delete_confirm": "Really delete your account permanently? All data will be removed.",
-    "delete_button": "Delete Account Permanently"
+    "delete_button": "Delete Account Permanently",
+    "anonymous": "Anonymous",
+    "vehicles_heading": "My Vehicles"
   },
   "settings": {
     "title": "Settings",
@@ -205,7 +257,13 @@
     "notifications_section": "Notifications",
     "notif_station_available": "Notify when favourite station becomes available",
     "notif_nearby": "Show community reports nearby",
-    "save": "Save"
+    "save": "Save",
+    "appearance_title": "Appearance",
+    "appearance_desc": "Language and theme can be toggled in the header menu.",
+    "notifications_title": "Push Notifications",
+    "notifications_desc": "Receive real-time alerts for your saved charging stations.",
+    "data_title": "My Data",
+    "data_desc": "Contact: datenschutz@ladekompass.de — Deletion on request in accordance with GDPR."
   },
   "admin": {
     "title": "Admin Panel",
@@ -224,6 +282,16 @@
     "no_reports": "No reports available.",
     "subscription_expires": "Expires",
     "reset_routes": "Reset Monthly Routes",
+    "total_users": "Total Users",
+    "total_reports": "Community Reports",
+    "subscriptions_link": "Manage Subscriptions",
+    "users_link": "Manage Users",
+    "subscriptions_title": "Subscriptions",
+    "col_user": "User",
+    "col_plan": "Plan",
+    "col_routes": "Routes / Month",
+    "col_since": "Since",
+    "no_subscriptions": "No subscriptions found.",
     "roles": {
       "driver": "Driver",
       "fleet_manager": "Fleet Manager",
@@ -257,7 +325,28 @@
     "feature_history": "Charging History",
     "cta_free": "Continue for Free",
     "cta_upgrade": "Upgrade to {plan}",
-    "cta_current": "Current Plan"
+    "cta_current": "Current Plan",
+    "badge": "Plans & Pricing",
+    "heading": "The right plan for you",
+    "subheading": "Start for free and upgrade anytime — no commitment, cancel monthly.",
+    "per_month": "/ month",
+    "feat_map": "Map with all stations",
+    "feat_routes_free": "5 routes / month",
+    "feat_routes_lite": "30 routes / month",
+    "feat_routes_pro": "Unlimited routes",
+    "feat_tariffs": "Tariff comparison",
+    "feat_favorites": "10 favourites",
+    "feat_dashboard": "Dashboard access",
+    "feat_reports": "Submit community reports",
+    "feat_favorites_pro": "Unlimited favourites",
+    "feat_newsfeed": "Live community feed",
+    "feat_notifications": "Push notifications",
+    "feat_priority": "Priority support",
+    "cta_upgrade_lite": "Upgrade to Lite",
+    "cta_upgrade_pro": "Upgrade to Pro",
+    "popular": "Popular",
+    "footer_note_title": "GDPR-compliant & Made in Germany",
+    "footer_note_desc": "No hidden costs. No ads. Your data stays in EU data centres."
   },
   "legal": {
     "agb": "Terms & Conditions",

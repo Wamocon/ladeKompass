@@ -59,7 +59,9 @@
     "adhoc_hint": "Diese Säule unterstützt Ad-hoc-Zahlung per Kreditkarte oder NFC direkt am Terminal – keine App nötig.",
     "no_tariff_data": "Keine Tarifdaten bekannt",
     "last_reported": "Zuletzt gemeldet: {time}",
-    "report_confirm_count": "{count} Bestätigungen"
+    "report_confirm_count": "{count} Bestätigungen",
+    "detail_heading": "Stationsdetails",
+    "full_page_hint": "Diese Seite zeigt vollständige Stationsdetails. Öffne eine Station auf der Karte für die interaktive Ansicht."
   },
   "report": {
     "title": "Meldung abgeben",
@@ -113,7 +115,27 @@
     "limit_reached": "Monatliches Routenlimit erreicht. Upgrade für mehr Routen.",
     "upgrade_prompt": "Routenplanung erfordert mindestens den Free-Tarif mit Anmeldung.",
     "distance_km": "{distance} km",
-    "duration_min": "ca. {duration} Min"
+    "duration_min": "ca. {duration} Min",
+    "subtitle": "Plane deine Langstrecke mit automatischen Ladestopps — basierend auf deinem Akku.",
+    "validation_error": "Bitte alle Felder korrekt ausfüllen.",
+    "quota_exceeded": "Routen-Limit dieses Monats erreicht. Upgrade für unbegrenzte Routen.",
+    "start": "Startpunkt",
+    "destination": "Ziel",
+    "place_name": "Ortsname (optional)",
+    "latitude": "Breitengrad",
+    "longitude": "Längengrad",
+    "vehicle_params": "Fahrzeugparameter",
+    "battery_kwh": "Akku (kWh)",
+    "current_soc": "Aktueller SoC %",
+    "min_arrival_soc": "Min. Ankunft %",
+    "distance": "Strecke",
+    "duration": "Dauer",
+    "minutes": "min",
+    "est_cost": "Lade-Kosten",
+    "route_steps": "Route",
+    "start_badge": "Start",
+    "end_badge": "Ziel",
+    "no_stop_needed": "Kein Ladestopp nötig — du erreichst das Ziel mit ausreichend Akku."
   },
   "vehicle": {
     "title": "Fahrzeugprofil",
@@ -131,7 +153,16 @@
     "cancel": "Abbrechen",
     "delete_confirm": "Fahrzeug wirklich löschen?",
     "no_vehicles": "Noch kein Fahrzeug angelegt.",
-    "default_badge": "Standard"
+    "default_badge": "Standard",
+    "add_vehicle": "Fahrzeug hinzufügen",
+    "name": "Bezeichnung",
+    "name_placeholder": "z.B. Mein Tesla",
+    "brand": "Hersteller",
+    "model": "Modell",
+    "battery_kwh": "Akkugröße (kWh)",
+    "max_charge_kw": "Ladeleistung (kW)",
+    "connector_type": "Steckertyp",
+    "set_default": "Als Standard-Fahrzeug verwenden"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -144,7 +175,15 @@
     "no_nearby": "Keine aktuellen Meldungen in der Nähe.",
     "news_feed_title": "News & Community",
     "news_feed_empty": "Keine Meldungen vorhanden.",
-    "pro_required": "News-Feed ab Pro-Tarif verfügbar"
+    "pro_required": "News-Feed ab Pro-Tarif verfügbar",
+    "subtitle": "Dein persönlicher LadeKompass-Überblick.",
+    "welcome_name": "Hallo, {name}",
+    "quick_map": "Karte",
+    "quick_map_desc": "Ladestationen in der Nähe finden",
+    "quick_route": "Routenplaner",
+    "quick_route_desc": "Langstrecke mit Ladestopps planen",
+    "quick_vehicles": "Fahrzeuge",
+    "quick_vehicles_desc": "Fahrzeugprofile verwalten"
   },
   "news_feed": {
     "type_community": "Community",
@@ -153,7 +192,18 @@
     "just_now": "Gerade eben",
     "minutes_ago": "vor {n} Min.",
     "hours_ago": "vor {n} Std.",
-    "live": "Live"
+    "live": "Live",
+    "title": "Community-Feed",
+    "empty": "Noch keine Meldungen. Sei der Erste!",
+    "load_more": "Mehr laden",
+    "status_changed": "Status geändert",
+    "type_community_report": "Community-Bericht",
+    "type_station_status_change": "Statusänderung",
+    "report_available": "Verfügbar",
+    "report_occupied": "Belegt",
+    "report_defect": "Defekt",
+    "report_price": "Preiskorrektur",
+    "report_other": "Sonstige Meldung"
   },
   "auth": {
     "login_title": "Anmelden",
@@ -191,7 +241,9 @@
     "dsgvo_export": "Meine Daten exportieren",
     "dsgvo_delete": "Konto löschen",
     "dsgvo_delete_confirm": "Konto wirklich unwiderruflich löschen? Alle Daten werden entfernt.",
-    "delete_button": "Konto endgültig löschen"
+    "delete_button": "Konto endgültig löschen",
+    "anonymous": "Anonym",
+    "vehicles_heading": "Meine Fahrzeuge"
   },
   "settings": {
     "title": "Einstellungen",
@@ -205,7 +257,13 @@
     "notifications_section": "Benachrichtigungen",
     "notif_station_available": "Benachrichtigung wenn Lieblingssäule wieder verfügbar",
     "notif_nearby": "Community-Meldungen in der Nähe anzeigen",
-    "save": "Speichern"
+    "save": "Speichern",
+    "appearance_title": "Erscheinungsbild",
+    "appearance_desc": "Sprache und Theme können im Header-Menü umgeschaltet werden.",
+    "notifications_title": "Push-Benachrichtigungen",
+    "notifications_desc": "Erhalte Echtzeit-Meldungen für deine gespeicherten Ladestationen.",
+    "data_title": "Meine Daten",
+    "data_desc": "Kontakt: datenschutz@ladekompass.de — Löschung auf Anfrage gemäß DSGVO."
   },
   "admin": {
     "title": "Admin-Bereich",
@@ -224,6 +282,16 @@
     "no_reports": "Keine Meldungen vorhanden.",
     "subscription_expires": "Läuft ab",
     "reset_routes": "Monats-Routen zurücksetzen",
+    "total_users": "Nutzer gesamt",
+    "total_reports": "Community-Berichte",
+    "subscriptions_link": "Abonnements verwalten",
+    "users_link": "Nutzer verwalten",
+    "subscriptions_title": "Abonnements",
+    "col_user": "Nutzer",
+    "col_plan": "Plan",
+    "col_routes": "Routen / Monat",
+    "col_since": "Seit",
+    "no_subscriptions": "Keine Abonnements vorhanden.",
     "roles": {
       "driver": "Fahrer",
       "fleet_manager": "Flottenmanager",
@@ -257,7 +325,28 @@
     "feature_history": "Ladehistorie",
     "cta_free": "Weiter kostenlos nutzen",
     "cta_upgrade": "Auf {plan} upgraden",
-    "cta_current": "Aktueller Tarif"
+    "cta_current": "Aktueller Tarif",
+    "badge": "Pläne & Preise",
+    "heading": "Das richtige Paket für dich",
+    "subheading": "Starte kostenlos und erweitere jederzeit — keine Bindung, monatlich kündbar.",
+    "per_month": "/ Monat",
+    "feat_map": "Kartenansicht mit allen Stationen",
+    "feat_routes_free": "5 Routen / Monat",
+    "feat_routes_lite": "30 Routen / Monat",
+    "feat_routes_pro": "Unbegrenzte Routen",
+    "feat_tariffs": "Tarifvergleich",
+    "feat_favorites": "10 Favoriten",
+    "feat_dashboard": "Dashboard-Zugang",
+    "feat_reports": "Community-Meldungen einreichen",
+    "feat_favorites_pro": "Unbegrenzte Favoriten",
+    "feat_newsfeed": "Live Community-Feed",
+    "feat_notifications": "Push-Benachrichtigungen",
+    "feat_priority": "Prioritäts-Support",
+    "cta_upgrade_lite": "Auf Lite upgraden",
+    "cta_upgrade_pro": "Auf Pro upgraden",
+    "popular": "Beliebt",
+    "footer_note_title": "DSGVO-konform & Made in Germany",
+    "footer_note_desc": "Keine versteckten Kosten. Keine Werbung. Deine Daten bleiben in EU-Rechenzentren."
   },
   "legal": {
     "agb": "AGB",
