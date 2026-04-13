@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-
-interface ReportPayload {
-  stationId: string;
-  stationName?: string;
-  lat?: number;
-  lng?: number;
-  reportType: "available" | "occupied" | "defect" | "price" | "other";
-  description?: string;
-  priceKwh?: number;
-}
+import { validateReportPayload } from "@/lib/route-calc";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -40,21 +31,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: ReportPayload;
+  let rawBody: unknown;
   try {
-    body = await req.json();
+    rawBody = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { stationId, stationName, lat, lng, reportType, description, priceKwh } = body;
-
-  if (!stationId || !reportType) {
+  const validation = validateReportPayload(rawBody);
+  if (validation.errors) {
     return NextResponse.json(
-      { error: "stationId and reportType are required" },
+      { error: "Validation failed", details: validation.errors },
       { status: 400 },
     );
   }
+
+  const { stationId, stationName, lat, lng, reportType, description, priceKwh } =
+    validation.data;
 
   const { data: report, error: reportError } = await supabase
     .from("station_reports")

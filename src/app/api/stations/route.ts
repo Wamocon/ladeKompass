@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { validateStationsQuery } from "@/lib/route-calc";
 
 export interface OCMStation {
   ID: number;
@@ -39,21 +40,28 @@ export interface OCMStation {
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
 
-  const lat = searchParams.get("lat") ?? "51.1657";
-  const lng = searchParams.get("lng") ?? "10.4515";
-  const distance = searchParams.get("distance") ?? "10";
-  const maxResults = searchParams.get("maxResults") ?? "100";
-  const powerLevel = searchParams.get("powerLevel"); // ac | dc | hpc
-  const connectorType = searchParams.get("connectorType"); // type2 | ccs | chademo | tesla_ccs
+  const validation = validateStationsQuery(searchParams);
+  if (validation.errors) {
+    return NextResponse.json(
+      { error: "Validation failed", details: validation.errors },
+      { status: 400 },
+    );
+  }
+
+  const { lat, lng, distance, maxResults, powerLevel, connectorType } = validation.data;
+  const latStr = String(lat);
+  const lngStr = String(lng);
+  const distanceStr = String(distance);
+  const maxResultsStr = String(maxResults);
 
   const OCM_BASE = "https://api.openchargemap.io/v3/poi/";
   const params = new URLSearchParams({
     output: "json",
-    latitude: lat,
-    longitude: lng,
-    distance,
+    latitude: latStr,
+    longitude: lngStr,
+    distance: distanceStr,
     distanceunit: "KM",
-    maxresults: maxResults,
+    maxresults: maxResultsStr,
     compact: "false",
     verbose: "false",
     countrycode: "DE",

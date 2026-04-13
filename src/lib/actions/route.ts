@@ -2,6 +2,14 @@
 
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import {
+  haversineKm,
+  estimateRangeKm,
+  usableEnergyKwh,
+  energyForDistanceKwh,
+  estimateTravelMinutes,
+  validateRouteInput,
+} from "@/lib/route-calc";
 
 export interface RouteStop {
   lat: number;
@@ -92,59 +100,70 @@ export async function calculateRoute(
     }
   }
 
-  // Estimate haversine distance between start and end
-  const R = 6371;
-  const dLat = ((input.endLat - input.startLat) * Math.PI) / 180;
-  const dLng = ((input.endLng - input.startLng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((input.startLat * Math.PI) / 180) *
-      Math.cos((input.endLat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  const totalDistanceKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  // Validate input
+  const validationResult = validateRouteInput({
+    ...input,
+    minArrivalSocPercent: input.minArrivalSocPercent ?? 10,
+  });
+  if (validationResult.errors) {
+    return {
+      stops: [],
+      totalDistanceKm: 0,
+      estimatedTimeMin: 0,
+      totalEstimatedCostEur: 0,
+      error: validationResult.errors.map((e) => e.message).join("; "),
+    };
+  }
+  const validated = validationResult.data;
 
-  // Simplified range estimation: 18 kWh/100km on average
-  const consumptionKwhPer100km = 18;
-  const usableKwh =
-    ((input.currentSocPercent - (input.minArrivalSocPercent ?? 10)) / 100) *
-    input.batteryCapacityKwh;
-  const rangeKm = (usableKwh / consumptionKwhPer100km) * 100;
+  const totalDistanceKm = haversineKm(
+    validated.startLat,
+    validated.startLng,
+    validated.endLat,
+    validated.endLng,
+  );
+
+  const usableKwh = usableEnergyKwh(
+    validated.batteryCapacityKwh,
+    validated.currentSocPercent,
+    validated.minArrivalSocPercent,
+  );
+  const rangeKm = estimateRangeKm(usableKwh);
 
   const stops: RouteStop[] = [
     {
-      lat: input.startLat,
-      lng: input.startLng,
-      name: input.startName,
+      lat: validated.startLat,
+      lng: validated.startLng,
+      name: validated.startName,
     },
   ];
 
   // If destination is within range, no charging stop needed
   if (totalDistanceKm > rangeKm) {
     // Find a midpoint charging stop
-    const midLat = (input.startLat + input.endLat) / 2;
-    const midLng = (input.startLng + input.endLng) / 2;
+    const midLat = (validated.startLat + validated.endLat) / 2;
+    const midLng = (validated.startLng + validated.endLng) / 2;
 
-    const energyNeeded =
-      ((totalDistanceKm - rangeKm) / 100) * consumptionKwhPer100km;
+    const energyNeeded = energyForDistanceKwh(totalDistanceKm - rangeKm);
 
     stops.push({
       lat: midLat,
       lng: midLng,
       name: "Ladestation (automatisch)",
-      energyAddedKwh: Math.min(energyNeeded * 1.1, input.batteryCapacityKwh * 0.8),
+      energyAddedKwh: Math.min(energyNeeded * 1.1, validated.batteryCapacityKwh * 0.8),
       estimatedCostEur: energyNeeded * 1.1 * 0.35,
     });
   }
 
   stops.push({
-    lat: input.endLat,
-    lng: input.endLng,
-    name: input.endName,
+    lat: validated.endLat,
+    lng: validated.endLng,
+    name: validated.endName,
   });
 
   const chargingStop = stops.find((s) => s.stationId || s.energyAddedKwh);
   const totalEstimatedCostEur = chargingStop?.estimatedCostEur ?? 0;
-  const estimatedTimeMin = Math.round((totalDistanceKm / 100) * 75);
+  const estimatedTimeMin = estimateTravelMinutes(totalDistanceKm);
 
   return {
     stops,
