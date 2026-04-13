@@ -166,7 +166,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "welcome": "Welcome back, {name}",
+    "welcome": "Welcome back",
     "recent_stations": "Recently Reported",
     "favorites": "Favourites",
     "nearby_reports": "Community Reports Nearby",

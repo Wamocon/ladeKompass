@@ -102,6 +102,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (res.status === 403) {
+      return NextResponse.json(
+        { error: "OCM API key required or invalid. Please set OCM_API_KEY in .env.local (free at openchargemap.org/site/develop/api).", code: "FORBIDDEN" },
+        { status: 403 },
+      );
+    }
+
     if (!res.ok) {
       console.error(`OCM API error: HTTP ${res.status} for URL: ${OCM_BASE}?${params.toString()}`);
       return NextResponse.json(

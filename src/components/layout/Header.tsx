@@ -64,17 +64,9 @@ export function Header({
   }
 
   const navLinks = [
+    { href: `/${locale}/dashboard`, label: t("nav.dashboard"), icon: LayoutDashboard },
     { href: `/${locale}/map`, label: t("nav.map"), icon: Map },
     { href: `/${locale}/route`, label: t("nav.route"), icon: Navigation },
-    ...(isAuthenticated
-      ? [
-          {
-            href: `/${locale}/dashboard`,
-            label: t("nav.dashboard"),
-            icon: LayoutDashboard,
-          },
-        ]
-      : []),
   ];
 
   const themeIcon = !mounted ? (

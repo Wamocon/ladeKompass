@@ -44,6 +44,15 @@ export default async function LocaleLayout({
   let userName: string | undefined;
   let isAuthenticated = false;
 
+  // In development, always use Pro plan for easy testing of all features
+  const isDev = process.env.NODE_ENV === "development";
+  if (isDev) {
+    isAuthenticated = true;
+    userPlan = "pro";
+    userRole = "super_admin";
+    userName = "Dev User";
+  }
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

@@ -93,8 +93,11 @@ export function StationMap({ defaultCenter, filters, flyToCenter }: StationMapPr
   const [selectedStation, setSelectedStation] = useState<OCMStation | null>(null);
   const currentCenter = useRef<[number, number]>(defaultCenter);
 
+  const [apiError, setApiError] = useState<string | null>(null);
+
   async function fetchStations(lat: number, lng: number) {
     setLoading(true);
+    setApiError(null);
     const params = new URLSearchParams({
       lat: String(lat),
       lng: String(lng),
@@ -109,6 +112,10 @@ export function StationMap({ defaultCenter, filters, flyToCenter }: StationMapPr
       if (res.ok) {
         const data: OCMStation[] = await res.json();
         setStations(data);
+      } else if (res.status === 403) {
+        setApiError("OCM API Key fehlt. Bitte OCM_API_KEY in .env.local setzen (kostenlos: openchargemap.org/site/develop/api).");
+      } else if (res.status === 429) {
+        setApiError("Rate-Limit erreicht. Bitte OCM_API_KEY in .env.local setzen.");
       }
     } finally {
       setLoading(false);
@@ -133,6 +140,13 @@ export function StationMap({ defaultCenter, filters, flyToCenter }: StationMapPr
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[600] bg-[var(--bg-surface)] border border-[var(--border)] rounded-full px-4 py-1.5 text-xs font-medium text-[var(--text-muted)] shadow flex items-center gap-2">
           <div className="w-3 h-3 border border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
           {t("loading")}
+        </div>
+      )}
+
+      {apiError && (
+        <div className="absolute top-4 left-4 right-4 z-[600] bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-800 dark:text-amber-300 shadow-md flex items-start gap-2">
+          <span className="shrink-0 text-amber-500 mt-0.5">⚠</span>
+          <span>{apiError}</span>
         </div>
       )}
 

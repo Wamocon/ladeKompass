@@ -22,8 +22,10 @@ export default async function DashboardPage({ params }: Props) {
   const t = await getTranslations({ locale, namespace: "dashboard" });
 
   const cookieStore = await cookies();
-  let userPlan = "free";
-  let userName: string | null = null;
+  // In development, always use Pro plan for easy testing
+  const isDev = process.env.NODE_ENV === "development";
+  let userPlan = isDev ? "pro" : "free";
+  let userName: string | null = isDev ? "Dev User" : null;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
