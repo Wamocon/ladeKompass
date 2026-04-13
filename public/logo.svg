@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Compass circle -->
+  <circle cx="32" cy="32" r="28" fill="#16a34a" />
+  <circle cx="32" cy="32" r="22" fill="none" stroke="white" stroke-width="1.5" stroke-opacity="0.3" />
+  
+  <!-- Lightning bolt (EV / charging symbol) -->
+  <path d="M36 14 L26 33 L31.5 33 L28 50 L38 31 L32.5 31 Z" fill="white" />
+  
+  <!-- Compass needle hint -->
+  <circle cx="32" cy="32" r="2.5" fill="white" fill-opacity="0.6" />
+</svg>
