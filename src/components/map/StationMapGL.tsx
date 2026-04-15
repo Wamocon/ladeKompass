@@ -355,7 +355,7 @@ export function StationMapGL({
     const map = mapRef.current;
     if (!map) return;
     toggle3D(map, show3D);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [show3D]);
 
   // --- Heatmap toggle -------------------------------------------------------
