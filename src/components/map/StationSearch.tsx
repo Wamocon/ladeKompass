@@ -30,10 +30,7 @@ export function StationSearch({ onLocationSelect }: StationSearchProps) {
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&countrycodes=de&limit=5`,
-        { headers: { "Accept-Language": "de" } },
-      );
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`);
       const data: NominatimResult[] = await res.json();
       setResults(data);
       setOpen(data.length > 0);

@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import { Metadata } from "next";
 import Link from "next/link";
-import { Users, Shield } from "lucide-react";
+import { Users, Shield, Key } from "lucide-react";
 
 interface Props {
   params: Promise<{ locale: string }>;
@@ -39,8 +39,12 @@ export default async function AdminPage({ params }: Props) {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        for (const { name, value, options } of cookiesToSet) {
-          cookieStore.set(name, value, options);
+        try {
+          for (const { name, value, options } of cookiesToSet) {
+            cookieStore.set(name, value, options);
+          }
+        } catch {
+          // Server Component — token refresh silent
         }
       },
     },
@@ -80,6 +84,12 @@ export default async function AdminPage({ params }: Props) {
       icon: <Users size={18} className="text-[var(--primary)]" />,
       label: t("users_link", { fallback: "Nutzer verwalten" }),
       available: true,
+    },
+    {
+      href: `/${locale}/admin/api-keys`,
+      icon: <Key size={18} className="text-[var(--primary)]" />,
+      label: "API-Keys & Externe Dienste",
+      available: role === "super_admin",
     },
   ];
 

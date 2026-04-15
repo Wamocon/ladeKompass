@@ -96,3 +96,18 @@ select {
   transition-duration: 150ms;
 }
 
+/* Map slide-up panel animation */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Leaflet cluster overrides */
+.leaflet-cluster-anim .leaflet-marker-icon,
+.leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+

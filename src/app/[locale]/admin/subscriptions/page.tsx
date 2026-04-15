@@ -52,8 +52,12 @@ export default async function AdminSubscriptionsPage({ params }: Props) {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        for (const { name, value, options } of cookiesToSet) {
-          cookieStore.set(name, value, options);
+        try {
+          for (const { name, value, options } of cookiesToSet) {
+            cookieStore.set(name, value, options);
+          }
+        } catch {
+          // Server Component — token refresh silent
         }
       },
     },

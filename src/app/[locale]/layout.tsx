@@ -44,14 +44,8 @@ export default async function LocaleLayout({
   let userName: string | undefined;
   let isAuthenticated = false;
 
-  // In development, always use Pro plan for easy testing of all features
+  // In development, fall back to Pro/super_admin if no real user is found
   const isDev = process.env.NODE_ENV === "development";
-  if (isDev) {
-    isAuthenticated = true;
-    userPlan = "pro";
-    userRole = "super_admin";
-    userName = "Dev User";
-  }
 
   try {
     const supabase = await createClient();
@@ -62,17 +56,29 @@ export default async function LocaleLayout({
       const { data: profile } = await supabase
         .from("profiles")
         .select("display_name, role, plan")
-        .eq("user_id", user.id)
-        .single();
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (profile) {
         userPlan = profile.plan as typeof userPlan;
         userRole = profile.role as typeof userRole;
         userName = profile.display_name ?? user.email?.split("@")[0];
       }
+    } else if (isDev) {
+      // No real user in dev → simulate pro/super_admin for easy UI testing
+      isAuthenticated = true;
+      userPlan = "pro";
+      userRole = "super_admin";
+      userName = "Dev User";
     }
   } catch {
     // Supabase not yet configured – ok in development
+    if (isDev) {
+      isAuthenticated = true;
+      userPlan = "pro";
+      userRole = "super_admin";
+      userName = "Dev User";
+    }
   }
 
   return (
