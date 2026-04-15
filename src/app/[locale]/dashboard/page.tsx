@@ -61,7 +61,8 @@ export default async function DashboardPage({ params }: Props) {
           .eq("id", user.id)
           .maybeSingle();
 
-        userPlan = profile?.plan ?? "free";
+        // Keep isDev default if DB returns nothing
+        userPlan = (profile?.plan as typeof userPlan) ?? userPlan;
         userName = profile?.display_name ?? user.email?.split("@")[0] ?? null;
       }
     } catch {

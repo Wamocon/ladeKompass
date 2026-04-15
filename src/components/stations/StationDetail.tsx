@@ -47,7 +47,7 @@ export function StationDetail({ station, onClose }: StationDetailProps) {
                   : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
               }`}
             >
-              {isOperational ? t("..status_available", { fallback: "Verfügbar" }) : t("..status_defect", { fallback: "Defekt" })}
+              {isOperational ? t("status_available", { fallback: "Verfügbar" }) : t("status_defect", { fallback: "Defekt" })}
             </span>
           )}
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-base)] p-1">

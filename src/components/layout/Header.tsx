@@ -22,6 +22,7 @@ import {
   Zap,
   Menu,
   X,
+  Car,
 } from "lucide-react";
 import type { UserPlan, UserRole } from "@/lib/legal/consent";
 
@@ -67,6 +68,7 @@ export function Header({
     { href: `/${locale}/dashboard`, label: t("nav.dashboard"), icon: LayoutDashboard },
     { href: `/${locale}/map`, label: t("nav.map"), icon: Map },
     { href: `/${locale}/route`, label: t("nav.route"), icon: Navigation },
+    { href: `/${locale}/profile`, label: t("nav.vehicles"), icon: Car },
   ];
 
   const themeIcon = !mounted ? (

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   MapContainer,
@@ -27,6 +27,27 @@ L.Icon.Default.mergeOptions({
 });
 
 type StatusColor = "available" | "occupied" | "defect" | "unknown";
+
+export type MapStyle = "light" | "dark" | "satellite" | "standard";
+
+const TILE_URLS: Record<MapStyle, { url: string; attribution: string }> = {
+  light: {
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  dark: {
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: 'Tiles &copy; Esri',
+  },
+  standard: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
+};
 
 function getStatusColor(color: StatusColor): string {
   const colors: Record<StatusColor, string> = {
@@ -207,6 +228,7 @@ interface StationMapProps {
   filters: StationFiltersState;
   flyToCenter: [number, number] | null;
   userLocation: [number, number] | null;
+  mapStyle?: MapStyle;
   onStationsChange?: (stations: OCMStation[]) => void;
   externalSelectedStation?: OCMStation | null;
   onExternalSelectClear?: () => void;
@@ -217,6 +239,7 @@ export function StationMap({
   filters,
   flyToCenter,
   userLocation,
+  mapStyle = "light",
   onStationsChange,
   externalSelectedStation,
   onExternalSelectClear,
@@ -231,7 +254,7 @@ export function StationMap({
   const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchStations = useCallback(async (lat: number, lng: number) => {
-    // Debounce: warte 400ms bevor Fetch ausgelÃ¶st wird
+    // Debounce: warte 400ms bevor Fetch ausgelöst wird
     if (fetchTimer.current) clearTimeout(fetchTimer.current);
     fetchTimer.current = setTimeout(async () => {
       setLoading(true);
@@ -314,11 +337,11 @@ export function StationMap({
       {/* Stats bar */}
       {!loading && stations.length > 0 && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[500] flex gap-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm border border-[var(--border)] rounded-full px-3 py-1 shadow text-[11px] font-semibold whitespace-nowrap">
-          <span className="text-green-600">â¬¤ {stats.available}</span>
-          <span className="text-zinc-400">Â·</span>
-          <span className="text-red-500">â¬¤ {stats.defect}</span>
-          <span className="text-zinc-400">Â·</span>
-          <span className="text-zinc-400">â¬¤ {stats.unknown}</span>
+          <span className="text-green-600">● {stats.available}</span>
+          <span className="text-zinc-400">·</span>
+          <span className="text-red-500">● {stats.defect}</span>
+          <span className="text-zinc-400">·</span>
+          <span className="text-zinc-400">● {stats.unknown}</span>
           <span className="text-zinc-400 font-normal">= {stations.length} {t("stations_found", { count: "" }).replace(" ", "")}</span>
         </div>
       )}
@@ -329,10 +352,10 @@ export function StationMap({
         style={{ height: "100%", width: "100%" }}
         zoomControl={false}
       >
-        {/* High-quality tile layer with retina support */}
+        {/* Dynamic tile layer based on selected map style */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={TILE_URLS[mapStyle].attribution}
+          url={TILE_URLS[mapStyle].url}
           maxZoom={19}
           detectRetina={true}
         />
@@ -351,7 +374,7 @@ export function StationMap({
         <ClusterLayer stations={stations} onSelect={setSelectedStation} />
       </MapContainer>
 
-      {/* Station detail panel â€” slide up from bottom */}
+      {/* Station detail panel — slide up from bottom */}
       {selectedStation && (
         <div className="absolute bottom-0 left-0 right-0 z-[500] animate-slide-up">
           <div className="max-w-lg mx-auto px-3 pb-4">

@@ -1,11 +1,11 @@
-import { NextIntlClientProvider } from "next-intl";
+﻿import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CookieBanner } from "@/components/layout/CookieBanner";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 
 interface LocaleLayoutProps {
@@ -48,21 +48,29 @@ export default async function LocaleLayout({
   const isDev = process.env.NODE_ENV === "development";
 
   try {
+    // Use anon client to verify auth, service client to read profile (bypasses RLS/GRANT issues)
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user) {
       isAuthenticated = true;
-      const { data: profile } = await supabase
+      const serviceSupabase = createServiceClient();
+      const { data: profile, error: profileError } = await serviceSupabase
         .from("profiles")
         .select("display_name, role, plan")
         .eq("id", user.id)
         .maybeSingle();
 
+      if (profileError) {
+        console.error("[layout] profile query failed:", profileError.message, profileError.code);
+      }
+
       if (profile) {
-        userPlan = profile.plan as typeof userPlan;
-        userRole = profile.role as typeof userRole;
+        userPlan = (profile.plan ?? undefined) as typeof userPlan;
+        userRole = (profile.role ?? undefined) as typeof userRole;
         userName = profile.display_name ?? user.email?.split("@")[0];
+      } else {
+        userName = user.email?.split("@")[0];
       }
     } else if (isDev) {
       // No real user in dev → simulate pro/super_admin for easy UI testing

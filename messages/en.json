@@ -7,6 +7,7 @@
     "map": "Map",
     "route": "Route Planner",
     "dashboard": "Dashboard",
+    "vehicles": "Vehicles",
     "profile": "Profile",
     "settings": "Settings",
     "admin": "Admin",
@@ -47,6 +48,8 @@
   },
   "station": {
     "detail_title": "Station Details",
+    "status_available": "Available",
+    "status_defect": "Defective",
     "address": "Address",
     "operator": "Operator",
     "opening_hours": "Opening Hours",
@@ -263,7 +266,11 @@
     "notifications_title": "Push Notifications",
     "notifications_desc": "Receive real-time alerts for your saved charging stations.",
     "data_title": "My Data",
-    "data_desc": "Contact: datenschutz@ladekompass.de — Deletion on request in accordance with GDPR."
+    "data_desc": "Contact: datenschutz@ladekompass.de — Deletion on request in accordance with GDPR.",
+    "profile_title": "Profile",
+    "locations_title": "My Locations",
+    "charging_title": "Charging Settings",
+    "password_title": "Change Password"
   },
   "admin": {
     "title": "Admin Panel",

@@ -7,6 +7,7 @@
     "map": "Karte",
     "route": "Routenplanung",
     "dashboard": "Dashboard",
+    "vehicles": "Fahrzeuge",
     "profile": "Profil",
     "settings": "Einstellungen",
     "admin": "Admin",
@@ -47,6 +48,8 @@
   },
   "station": {
     "detail_title": "Ladesäulen-Details",
+    "status_available": "Verfügbar",
+    "status_defect": "Defekt",
     "address": "Adresse",
     "operator": "Betreiber",
     "opening_hours": "Öffnungszeiten",
@@ -263,7 +266,11 @@
     "notifications_title": "Push-Benachrichtigungen",
     "notifications_desc": "Erhalte Echtzeit-Meldungen für deine gespeicherten Ladestationen.",
     "data_title": "Meine Daten",
-    "data_desc": "Kontakt: datenschutz@ladekompass.de — Löschung auf Anfrage gemäß DSGVO."
+    "data_desc": "Kontakt: datenschutz@ladekompass.de — Löschung auf Anfrage gemäß DSGVO.",
+    "profile_title": "Profil",
+    "locations_title": "Meine Standorte",
+    "charging_title": "Ladeeinstellungen",
+    "password_title": "Passwort ändern"
   },
   "admin": {
     "title": "Admin-Bereich",

@@ -1,10 +1,9 @@
-import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+﻿import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { Metadata } from "next";
 import Link from "next/link";
 import { Users, Shield, Key } from "lucide-react";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 interface Props {
   params: Promise<{ locale: string }>;
@@ -20,42 +19,12 @@ export default async function AdminPage({ params }: Props) {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "admin" });
 
-  const cookieStore = await cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return (
-      <main className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
-        <p className="text-sm text-[var(--text-muted)]">Supabase not configured.</p>
-      </main>
-    );
-  }
-
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    db: { schema: process.env.SUPABASE_DB_SCHEMA ?? "ladekompass-dev" },
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          for (const { name, value, options } of cookiesToSet) {
-            cookieStore.set(name, value, options);
-          }
-        } catch {
-          // Server Component — token refresh silent
-        }
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/${locale}/auth/login`);
 
-  const { data: profile } = await supabase
+  const serviceSupabase = createServiceClient();
+  const { data: profile } = await serviceSupabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -68,8 +37,8 @@ export default async function AdminPage({ params }: Props) {
 
   // Stats
   const [{ count: userCount }, { count: reportCount }] = await Promise.all([
-    supabase.from("profiles").select("*", { count: "exact", head: true }),
-    supabase.from("station_reports").select("*", { count: "exact", head: true }),
+    serviceSupabase.from("profiles").select("*", { count: "exact", head: true }),
+    serviceSupabase.from("station_reports").select("*", { count: "exact", head: true }),
   ]);
 
   const adminLinks = [
