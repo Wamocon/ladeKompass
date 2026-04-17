@@ -2,9 +2,9 @@
 
 import { useState, useTransition, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { Navigation, Loader2, Search, ChevronDown, ChevronUp, X, MapPin } from "lucide-react";
-import { calculateRoute } from "@/lib/actions/route";
-import type { RouteResult } from "@/lib/actions/route";
+import { Navigation, Loader2, Search, ChevronDown, ChevronUp, X, MapPin, Bookmark, BookmarkCheck, Map } from "lucide-react";
+import { calculateRoute, saveRoute } from "@/lib/actions/route";
+import type { RouteResult, CalculateRouteInput } from "@/lib/actions/route";
 import { RouteSummary } from "./RouteSummary";
 
 interface GeoResult {
@@ -41,6 +41,9 @@ export function RoutePlanner() {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<RouteResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const lastInputRef = useRef<CalculateRouteInput | null>(null);
 
   const [start, setStart] = useState<LocationState>(emptyLocation());
   const [end, setEnd] = useState<LocationState>(emptyLocation());
@@ -100,6 +103,7 @@ export function RoutePlanner() {
     e.preventDefault();
     setError(null);
     setResult(null);
+    setSavedId(null);
 
     const startLat = parseFloat(start.lat);
     const startLng = parseFloat(start.lng);
@@ -114,25 +118,39 @@ export function RoutePlanner() {
       return;
     }
 
-    startTransition(async () => {
-      const res = await calculateRoute({
-        startLat,
-        startLng,
-        startName: start.label || `${startLat}, ${startLng}`,
-        endLat,
-        endLng,
-        endName: end.label || `${endLat}, ${endLng}`,
-        batteryCapacityKwh,
-        currentSocPercent,
-        minArrivalSocPercent,
-      });
+    const routeInput: CalculateRouteInput = {
+      startLat,
+      startLng,
+      startName: start.label || `${startLat}, ${startLng}`,
+      endLat,
+      endLng,
+      endName: end.label || `${endLat}, ${endLng}`,
+      batteryCapacityKwh,
+      currentSocPercent,
+      minArrivalSocPercent,
+    };
+    lastInputRef.current = routeInput;
 
+    startTransition(async () => {
+      const res = await calculateRoute(routeInput);
       if (res.error === "QUOTA_EXCEEDED") {
         setError(t("quota_exceeded", { fallback: "Routen-Limit dieses Monats erreicht. Upgrade auf Pro für unbegrenzte Routen." }));
       } else {
         setResult(res);
       }
     });
+  }
+
+  async function handleSave() {
+    if (!result || !lastInputRef.current) return;
+    setSaving(true);
+    const { id, error: saveErr } = await saveRoute({
+      name: `${lastInputRef.current.startName} → ${lastInputRef.current.endName}`,
+      result,
+      input: lastInputRef.current,
+    });
+    setSaving(false);
+    if (!saveErr) setSavedId(id);
   }
 
   // â”€â”€â”€ Reusable location input block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -304,7 +322,56 @@ export function RoutePlanner() {
         </button>
       </form>
 
-      {result && <RouteSummary result={result} />}
+      {result && (
+        <div className="mt-4 space-y-3">
+          <RouteSummary result={result} />
+          <div className="flex items-center gap-2">
+            {savedId ? (
+              <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400 font-medium">
+                <BookmarkCheck size={15} />
+                {t("saved", { fallback: "Route gespeichert" })}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : <Bookmark size={13} />}
+                {t("save_route", { fallback: "Route speichern" })}
+              </button>
+            )}
+            <a
+              href="../route/archive"
+              className="text-xs text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors underline"
+            >
+              {t("view_archive", { fallback: "Archiv anzeigen →" })}
+            </a>
+            {lastInputRef.current && (
+              <button
+                type="button"
+                onClick={() => {
+                  const inp = lastInputRef.current;
+                  if (!inp) return;
+                  const preset = {
+                    fromLabel: inp.startName,
+                    toLabel: inp.endName,
+                    fromCoord: [inp.startLat, inp.startLng],
+                    toCoord: [inp.endLat, inp.endLng],
+                  };
+                  localStorage.setItem("lk_nav_preset", JSON.stringify(preset));
+                  window.location.href = `/${window.location.pathname.split("/")[1]}/map`;
+                }}
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                <Map size={12} />
+                {t("use_in_nav", { fallback: "Navigation starten" })}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

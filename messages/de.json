@@ -138,7 +138,24 @@
     "route_steps": "Route",
     "start_badge": "Start",
     "end_badge": "Ziel",
-    "no_stop_needed": "Kein Ladestopp nötig — du erreichst das Ziel mit ausreichend Akku."
+    "no_stop_needed": "Kein Ladestopp nötig — du erreichst das Ziel mit ausreichend Akku.",
+    "save_route": "Route speichern",
+    "saved": "Route gespeichert",
+    "view_archive": "Archiv anzeigen →",
+    "archive_title": "Gespeicherte Routen",
+    "archive_empty": "Noch keine Routen gespeichert.",
+    "archive_delete": "Löschen",
+    "use_in_nav": "Navigation starten"
+  },
+  "navigation": {
+    "title": "Navigation",
+    "from_placeholder": "Startadresse eingeben…",
+    "to_placeholder": "Zieladresse eingeben…",
+    "calculate": "Route berechnen",
+    "calculating": "Wird berechnet…",
+    "clear": "Route löschen",
+    "no_route": "Keine Route gefunden.",
+    "addr_not_found": "Adressen konnten nicht gefunden werden."
   },
   "vehicle": {
     "title": "Fahrzeugprofil",

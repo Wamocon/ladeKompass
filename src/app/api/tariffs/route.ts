@@ -65,7 +65,12 @@ export async function GET(request: NextRequest) {
       (item: Record<string, unknown>) => ({
         id: String(item.id ?? ""),
         name: String((item.attributes as Record<string, unknown>)?.tariff_name ?? (item.attributes as Record<string, unknown>)?.name ?? ""),
-        pricePerKwh: Number((item.attributes as Record<string, unknown>)?.total_monthly_fee ?? 0),
+        pricePerKwh: Number(
+          (item.attributes as Record<string, unknown>)?.kwh ??
+          (item.attributes as Record<string, unknown>)?.per_kwh ??
+          (item.attributes as Record<string, unknown>)?.price_per_kwh ??
+          0
+        ),
         price: Number((item.attributes as Record<string, unknown>)?.price ?? 0),
         currency: "EUR",
       }),

@@ -1,15 +1,19 @@
 ﻿"use client";
 
+import type * as GeoJSON from "geojson";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { StationMap } from "./StationMap";
-import type { MapStyle } from "./StationMap";
+import { StationMapGL } from "./StationMapGL";
+import type { MapStyle } from "./StationMapGL";
 import { StationFilters } from "./StationFilters";
 import { StationSearch } from "./StationSearch";
+import { NavigationWizard } from "./NavigationWizard";
+import type { NavRoutePreset } from "./NavigationWizard";
 import type { StationFiltersState } from "./StationFilters";
 import type { OCMStation } from "@/app/api/stations/route";
 import {
   Zap, MapPin, ChevronRight, Wifi, WifiOff, HelpCircle,
-  Navigation, Layers, Target, BarChart2, ChevronDown, ChevronUp,
+  Navigation as NavIcon, Layers, Target, BarChart2, ChevronDown, ChevronUp,
+  Download, Thermometer, Box, Clock, X,
 } from "lucide-react";
 
 // â”€â”€â”€ Station feed helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -57,7 +61,11 @@ const MAP_STYLES: Array<{ key: MapStyle; label: string; emoji: string }> = [
   { key: "dark", label: "Dunkel", emoji: "🌙" },
   { key: "satellite", label: "Satellit", emoji: "🛰️" },
   { key: "standard", label: "Standard", emoji: "🗺️" },
+  { key: "3d", label: "3D", emoji: "🏙️" },
 ];
+
+const BNETZA_URL =
+  "https://www.bundesnetzagentur.de/SharedDocs/Downloads/DE/Sachgebiete/Energie/Unternehmen_Institutionen/E_Mobilitaet/Ladesaeulenregister.xlsx?__blob=publicationFile";
 
 // â”€â”€â”€ Panel section component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -118,6 +126,12 @@ export default function StationMapWrapper() {
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [show3D, setShow3D] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showOpenOnly, setShowOpenOnly] = useState(false);
+  const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(null);
+  const [navPosition, setNavPosition] = useState<[number, number, number] | null>(null);
 
   useEffect(() => {
     if (navigator?.geolocation) {
@@ -130,6 +144,17 @@ export default function StationMapWrapper() {
         () => {},
         { timeout: 6000 },
       );
+    }
+    // Load nav preset from route planner (if navigated here with "Navigation starten")
+    try {
+      const raw = localStorage.getItem("lk_nav_preset");
+      if (raw) {
+        const parsed = JSON.parse(raw) as NavRoutePreset;
+        setNavPreset(parsed);
+        localStorage.removeItem("lk_nav_preset");
+      }
+    } catch {
+      // ignore
     }
   }, []);
 
@@ -187,7 +212,59 @@ export default function StationMapWrapper() {
     );
   }
 
+  function handleFindNearestFree() {
+    const ref = userLocation ?? [51.1657, 10.4515];
+    const free = visibleStations.filter((s) => s.StatusType?.IsOperational);
+    if (free.length === 0) {
+      showToast("Keine verfügbare Station in Sichtweite.");
+      return;
+    }
+    const nearest = free.reduce((best, s) => {
+      const d = haversine(ref[0], ref[1], s.AddressInfo.Latitude, s.AddressInfo.Longitude);
+      const dBest = haversine(ref[0], ref[1], best.AddressInfo.Latitude, best.AddressInfo.Longitude);
+      return d < dBest ? s : best;
+    });
+    const dist = haversine(ref[0], ref[1], nearest.AddressInfo.Latitude, nearest.AddressInfo.Longitude);
+    setFlyToCenter([nearest.AddressInfo.Latitude, nearest.AddressInfo.Longitude]);
+    setSelectedStation(nearest);
+    showToast(`✅ ${nearest.AddressInfo.Title} • ${dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`}`);
+  }
+
+  function handleExportCSV() {
+    if (visibleStations.length === 0) {
+      showToast("Keine Stationen zum Exportieren.");
+      return;
+    }
+    const header = ["Name", "Ort", "PLZ", "Breitengrad", "Längengrad", "Max kW", "Status", "Betreiber"];
+    const rows = visibleStations.map((s) => {
+      const maxKw = Math.max(0, ...(s.Connections?.map((c) => c.PowerKW ?? 0) ?? []));
+      return [
+        `"${(s.AddressInfo.Title ?? "").replace(/"/g, '""')}"`,
+        `"${(s.AddressInfo.Town ?? "").replace(/"/g, '""')}"`,
+        s.AddressInfo.Postcode ?? "",
+        s.AddressInfo.Latitude,
+        s.AddressInfo.Longitude,
+        maxKw,
+        s.StatusType?.IsOperational ? "Verfügbar" : s.StatusType ? "Defekt" : "Unbekannt",
+        `"${(s.OperatorInfo?.Title ?? "").replace(/"/g, '""')}"`,
+      ].join(",");
+    });
+    const csv = [header.join(","), ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ladekompass-stationen-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`${visibleStations.length} Stationen exportiert.`);
+  }
+
   // Derived stats
+  const displayedStations = showOpenOnly
+    ? visibleStations.filter((s) => s.OpeningTimes?.IsOpen247 === true || s.StatusType?.IsOperational)
+    : visibleStations;
+
   const stats = {
     available: visibleStations.filter((s) => s.StatusType?.IsOperational).length,
     defect: visibleStations.filter((s) => s.StatusType && !s.StatusType.IsOperational).length,
@@ -198,7 +275,11 @@ export default function StationMapWrapper() {
       return p >= 22 && p < 150;
     }).length,
     ac: visibleStations.filter((s) => Math.max(0, ...(s.Connections?.map((c) => c.PowerKW ?? 0) ?? [])) < 22).length,
+    open247: visibleStations.filter((s) => s.OpeningTimes?.IsOpen247 === true).length,
   };
+  const totalPower = stats.hpc + stats.dc + stats.ac || 1;
+
+  const [showPanel, setShowPanel] = useState(true);
 
   const POWER_CHIPS = [
     { label: "AC \u226422kW", value: "ac" as const },
@@ -215,13 +296,38 @@ export default function StationMapWrapper() {
   return (
     <div className="relative flex-1 flex h-full overflow-hidden">
 
-      {/* â•â•â• LEFT PANEL (full height) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <div className="absolute top-0 left-0 bottom-0 z-[600] w-72 flex flex-col pointer-events-none">
+      {/* LEFT PANEL toggle FAB when hidden */}
+      {!showPanel && (
+        <button
+          type="button"
+          onClick={() => setShowPanel(true)}
+          className="absolute top-3 left-3 z-[650] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full p-2.5 shadow-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+          title="Panel einblenden"
+        >
+          <Layers size={18} className="text-zinc-600 dark:text-zinc-300" />
+        </button>
+      )}
+
+      {/* LEFT PANEL (full height) */}
+      <div className={`absolute top-0 left-0 bottom-0 z-[600] w-72 flex flex-col pointer-events-none transition-transform duration-300 ${showPanel ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Scrollable panel container */}
         <div className="pointer-events-auto flex flex-col gap-0 m-3 mr-0 overflow-y-auto rounded-2xl bg-white/97 dark:bg-zinc-900/97 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 shadow-xl max-h-full">
 
+          {/* Panel header with hide button */}
+          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+            <span className="flex-1 text-xs font-bold text-zinc-400 uppercase tracking-widest">LadeKompass</span>
+            <button
+              type="button"
+              onClick={() => setShowPanel(false)}
+              className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title="Panel ausblenden"
+            >
+              <X size={13} />
+            </button>
+          </div>
+
           {/* Search bar */}
-          <div className="px-3 pt-3 pb-2">
+          <div className="px-3 pt-1 pb-2">
             <StationSearch onLocationSelect={handleLocationSelect} />
           </div>
 
@@ -270,13 +376,27 @@ export default function StationMapWrapper() {
                   </button>
                 ))}
               </div>
-              {(filters.powerLevel || filters.connectorType) && (
+              <div className="flex flex-wrap gap-1">
                 <button
                   type="button"
-                  onClick={() => setFilters({ powerLevel: null, connectorType: null })}
+                  onClick={() => setShowOpenOnly((v) => !v)}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors flex items-center gap-1 ${
+                    showOpenOnly
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-amber-400 hover:text-amber-600"
+                  }`}
+                >
+                  <Clock size={9} />
+                  Jetzt geöffnet
+                </button>
+              </div>
+              {(filters.powerLevel || filters.connectorType || showOpenOnly) && (
+                <button
+                  type="button"
+                  onClick={() => { setFilters({ powerLevel: null, connectorType: null }); setShowOpenOnly(false); }}
                   className="text-[10px] text-red-500 hover:underline"
                 >
-                  &#10005; Filter zur\u00fccksetzen
+                  &#10005; Filter zurücksetzen
                 </button>
               )}
               <div className="pt-1">
@@ -300,6 +420,7 @@ export default function StationMapWrapper() {
                 { label: "HPC \u226515kW", val: stats.hpc, cls: "text-purple-600 dark:text-purple-400" },
                 { label: "DC 22\u2013150kW", val: stats.dc, cls: "text-blue-600 dark:text-blue-400" },
                 { label: "AC \u226422kW", val: stats.ac, cls: "text-zinc-500" },
+                { label: "24/7 geöffnet", val: stats.open247, cls: "text-amber-600 dark:text-amber-400" },
               ].map(({ label, val, cls }) => (
                 <div
                   key={label}
@@ -310,6 +431,27 @@ export default function StationMapWrapper() {
                 </div>
               ))}
             </div>
+            {/* Mini bar chart: HPC / DC / AC ratio */}
+            {visibleStations.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {[
+                  { label: "HPC", val: stats.hpc, color: "bg-purple-500" },
+                  { label: "DC",  val: stats.dc,  color: "bg-blue-500" },
+                  { label: "AC",  val: stats.ac,  color: "bg-zinc-400" },
+                ].map(({ label, val, color }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="text-[9px] w-6 text-right font-bold text-zinc-400">{label}</span>
+                    <div className="flex-1 h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${color} rounded-full transition-all duration-500`}
+                        style={{ width: `${Math.round((val / totalPower) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] w-6 text-zinc-400">{val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </PanelSection>
 
           {/* â”€â”€ Aktionen â”€â”€â”€ */}
@@ -321,7 +463,7 @@ export default function StationMapWrapper() {
                 disabled={locating}
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-blue-400 hover:text-blue-600 transition-colors disabled:opacity-60"
               >
-                <Navigation size={13} className={locating ? "animate-spin text-blue-500" : ""} />
+                <NavIcon size={13} className={locating ? "animate-spin text-blue-500" : ""} />
                 {locating ? "Wird geortet\u2026" : "Meinen Standort finden"}
               </button>
               <button
@@ -330,8 +472,34 @@ export default function StationMapWrapper() {
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-purple-400 hover:text-purple-600 transition-colors"
               >
                 <Target size={13} />
-                N\u00e4chste HPC-Schnellladung finden
+                Nächste HPC-Schnellladung finden
               </button>
+              <button
+                type="button"
+                onClick={handleFindNearestFree}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-green-400 hover:text-green-600 transition-colors"
+              >
+                <Target size={13} className="text-green-500" />
+                Nächste freie Station finden
+              </button>
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+              >
+                <Download size={13} />
+                Stationen als CSV exportieren
+              </button>
+              <a
+                href={BNETZA_URL}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-orange-400 hover:text-orange-600 transition-colors"
+              >
+                <Download size={13} className="text-orange-500" />
+                BNetzA Ladesäulenregister (XLSX)
+              </a>
             </div>
           </PanelSection>
 
@@ -339,13 +507,13 @@ export default function StationMapWrapper() {
           <PanelSection
             title="Stationen"
             icon={<MapPin size={13} />}
-            badge={visibleStations.length}
+            badge={displayedStations.length}
           >
-            {visibleStations.length === 0 ? (
+            {displayedStations.length === 0 ? (
               <p className="text-xs text-zinc-400 text-center py-2">Keine Stationen geladen.</p>
             ) : (
               <div className="space-y-0 -mx-3">
-                {visibleStations.slice(0, 40).map((s) => (
+                {displayedStations.slice(0, 40).map((s) => (
                   <button
                     key={s.ID}
                     type="button"
@@ -370,16 +538,52 @@ export default function StationMapWrapper() {
                     </div>
                   </button>
                 ))}
-                {visibleStations.length > 40 && (
+                {displayedStations.length > 40 && (
                   <p className="text-[10px] text-zinc-400 text-center py-2">
-                    + {visibleStations.length - 40} weitere Stationen im Bereich
+                    + {displayedStations.length - 40} weitere Stationen im Bereich
                   </p>
                 )}
               </div>
             )}
           </PanelSection>
 
-          {/* â”€â”€ Kartenstil â”€â”€â”€ */}
+          {/* Kartenoptionen */}
+          <PanelSection title="Kartenoptionen" icon={<Box size={13} />}>
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => { setShow3D((v) => !v); setMapStyle(show3D ? "standard" : "3d"); }}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                  show3D
+                    ? "bg-sky-50 dark:bg-sky-900/30 border-sky-400 text-sky-700 dark:text-sky-300"
+                    : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-sky-400 hover:text-sky-600"
+                }`}
+              >
+                <Box size={12} />
+                3D-Gebäudeansicht
+                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                  show3D ? "bg-sky-200 text-sky-800" : "bg-zinc-100 text-zinc-400"
+                }`}>{show3D ? "AN" : "AUS"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHeatmap((v) => !v)}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                  showHeatmap
+                    ? "bg-orange-50 dark:bg-orange-900/30 border-orange-400 text-orange-700 dark:text-orange-300"
+                    : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-orange-400 hover:text-orange-600"
+                }`}
+              >
+                <Thermometer size={12} />
+                Heatmap-Ansicht
+                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                  showHeatmap ? "bg-orange-200 text-orange-800" : "bg-zinc-100 text-zinc-400"
+                }`}>{showHeatmap ? "AN" : "AUS"}</span>
+              </button>
+            </div>
+          </PanelSection>
+
+          {/* ── Kartenstil ─── */}
           <PanelSection title="Kartenstil" icon={<Layers size={13} />}>
             <div className="grid grid-cols-2 gap-1.5">
               {MAP_STYLES.map((style) => (
@@ -422,15 +626,36 @@ export default function StationMapWrapper() {
       )}
 
       {/* â•â•â• MAP â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-      <StationMap
+      {/* Navigation Wizard - right floating panel */}
+      <NavigationWizard
+        onRoute={(geoJSON) => setRouteGeoJSON(geoJSON)}
+        onClear={() => { setRouteGeoJSON(null); setNavPosition(null); }}
+        preset={navPreset}
+        onPositionUpdate={(pos) => setNavPosition(pos)}
+        onNavStop={() => setNavPosition(null)}
+      />
+
+      <StationMapGL
         defaultCenter={[51.1657, 10.4515]}
         filters={filters}
         flyToCenter={flyToCenter}
         userLocation={userLocation}
         mapStyle={mapStyle}
+        show3D={show3D}
+        showHeatmap={showHeatmap}
         onStationsChange={setVisibleStations}
-        externalSelectedStation={selectedStation}
-        onExternalSelectClear={() => setSelectedStation(null)}
+        onStationSelect={(s) => setSelectedStation(s)}
+        selectedStation={selectedStation}
+        routeGeoJSON={routeGeoJSON}
+        navPosition={navPosition}
+        onNavigateTo={(lat, lng, label) => {
+          setNavPreset({
+            fromLabel: "Aktueller Standort",
+            toLabel: label,
+            fromCoord: userLocation ?? [51.1657, 10.4515],
+            toCoord: [lat, lng],
+          });
+        }}
       />
     </div>
   );

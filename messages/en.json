@@ -138,7 +138,24 @@
     "route_steps": "Route",
     "start_badge": "Start",
     "end_badge": "Destination",
-    "no_stop_needed": "No charging stop needed — you will reach your destination with sufficient battery."
+    "no_stop_needed": "No charging stop needed — you will reach your destination with sufficient battery.",
+    "save_route": "Save Route",
+    "saved": "Route saved",
+    "view_archive": "View archive →",
+    "archive_title": "Saved Routes",
+    "archive_empty": "No routes saved yet.",
+    "archive_delete": "Delete",
+    "use_in_nav": "Start Navigation"
+  },
+  "navigation": {
+    "title": "Navigation",
+    "from_placeholder": "Enter start address…",
+    "to_placeholder": "Enter destination…",
+    "calculate": "Calculate Route",
+    "calculating": "Calculating…",
+    "clear": "Clear route",
+    "no_route": "No route found.",
+    "addr_not_found": "Addresses could not be found."
   },
   "vehicle": {
     "title": "Vehicle Profile",

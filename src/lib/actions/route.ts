@@ -172,3 +172,129 @@ export async function calculateRoute(
     totalEstimatedCostEur,
   };
 }
+
+// ─── Save a route to the database ─────────────────────────────────────────────
+
+export interface SaveRouteInput {
+  name?: string;
+  result: RouteResult;
+  input: CalculateRouteInput;
+}
+
+export async function saveRoute(data: SaveRouteInput): Promise<{ id: string; error?: string }> {
+  const cookieStore = await cookies();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return { id: "", error: "Supabase not configured" };
+  }
+
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    db: { schema: process.env.SUPABASE_DB_SCHEMA ?? "ladekompass-dev" },
+    cookies: {
+      getAll() { return cookieStore.getAll(); },
+      setAll(cookiesToSet) {
+        for (const { name, value, options } of cookiesToSet) {
+          cookieStore.set(name, value, options);
+        }
+      },
+    },
+  });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { id: "", error: "NOT_AUTHENTICATED" };
+
+  const { data: row, error } = await supabase
+    .from("saved_routes")
+    .insert({
+      user_id: user.id,
+      name: data.name ?? `Route ${new Date().toLocaleDateString("de-DE")}`,
+      result: data.result as unknown as Record<string, unknown>,
+      input: data.input as unknown as Record<string, unknown>,
+    })
+    .select("id")
+    .single();
+
+  if (error || !row) {
+    return { id: "", error: error?.message ?? "Failed to save route" };
+  }
+  return { id: row.id as string };
+}
+
+// ─── Load saved routes for the current user ────────────────────────────────
+
+export interface SavedRouteRecord {
+  id: string;
+  name: string;
+  result: RouteResult;
+  input: CalculateRouteInput;
+  created_at: string;
+}
+
+export async function getSavedRoutes(): Promise<{ routes: SavedRouteRecord[]; error?: string }> {
+  const cookieStore = await cookies();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return { routes: [], error: "Supabase not configured" };
+  }
+
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    db: { schema: process.env.SUPABASE_DB_SCHEMA ?? "ladekompass-dev" },
+    cookies: {
+      getAll() { return cookieStore.getAll(); },
+      setAll(cookiesToSet) {
+        for (const { name, value, options } of cookiesToSet) {
+          cookieStore.set(name, value, options);
+        }
+      },
+    },
+  });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { routes: [], error: "NOT_AUTHENTICATED" };
+
+  const { data, error } = await supabase
+    .from("saved_routes")
+    .select("id, name, result, input, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) return { routes: [], error: error.message };
+  return { routes: (data ?? []) as SavedRouteRecord[] };
+}
+
+// ─── Delete a saved route ────────────────────────────────────────────────────
+
+export async function deleteSavedRoute(id: string): Promise<{ error?: string }> {
+  const cookieStore = await cookies();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) return { error: "Supabase not configured" };
+
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    db: { schema: process.env.SUPABASE_DB_SCHEMA ?? "ladekompass-dev" },
+    cookies: {
+      getAll() { return cookieStore.getAll(); },
+      setAll(cookiesToSet) {
+        for (const { name, value, options } of cookiesToSet) {
+          cookieStore.set(name, value, options);
+        }
+      },
+    },
+  });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "NOT_AUTHENTICATED" };
+
+  const { error } = await supabase
+    .from("saved_routes")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id); // RLS double-check
+
+  return error ? { error: error.message } : {};
+}
