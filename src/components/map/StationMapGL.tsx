@@ -457,7 +457,7 @@ export function StationMapGL({
       const priceId = `lk-price-${found.ID}`;
       const chargepriceUrl = `https://www.chargeprice.app/?station=${found.UUID}&source=ocm`;
 
-      const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/'/g,"\\'")}');this.closest('.maplibregl-popup').remove();" style="margin-top:10px;width:100%;padding:9px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">▶ Navigation starten</button>`;
+      const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}');this.closest('.maplibregl-popup').remove();" style="margin-top:10px;width:100%;padding:9px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">▶ Navigation starten</button>`;
 
       const html = `<div style="
         background:rgba(8,8,18,0.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
