@@ -1,8 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Backgrounds */
+  --bg-page: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f1f5f9;
+  --bg-base: #ffffff;
+
+  /* Text */
+  --text-base: #0f172a;
+  --text-muted: #64748b;
+
+  /* Border */
+  --border: #e2e8f0;
+
+  /* Primary – electric green (EV-themed) */
+  --primary: #16a34a;
+  --primary-light: #dcfce7;
+  --primary-light-soft: #f0fdf4;
+  --primary-hover: #15803d;
+
+  /* Status colors */
+  --status-available: #16a34a;
+  --status-occupied: #d97706;
+  --status-defect: #dc2626;
+  --status-unknown: #94a3b8;
+
+  /* Semantic */
+  --background: var(--bg-page);
+  --foreground: var(--text-base);
+}
+
+.dark {
+  --bg-page: #0a0a0a;
+  --bg-surface: #111111;
+  --bg-elevated: #1a1a1a;
+  --bg-base: #0a0a0a;
+
+  --text-base: #f1f5f9;
+  --text-muted: #94a3b8;
+
+  --border: #27272a;
+
+  --primary: #22c55e;
+  --primary-light: #14532d;
+  --primary-light-soft: #052e16;
+  --primary-hover: #16a34a;
+
+  --status-available: #22c55e;
+  --status-occupied: #f59e0b;
+  --status-defect: #ef4444;
+  --status-unknown: #64748b;
+
+  --background: var(--bg-page);
+  --foreground: var(--text-base);
 }
 
 @theme inline {
@@ -12,15 +63,59 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--bg-page);
+  color: var(--text-base);
+  font-family: var(--font-geist-sans, Arial, Helvetica, sans-serif);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Leaflet map container */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
 }
+
+/* Smooth transitions for theme toggle */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* But not for elements where it's distracting */
+button,
+a,
+input,
+textarea,
+select {
+  transition-property: background-color, border-color, color, box-shadow,
+    opacity, transform;
+  transition-duration: 150ms;
+}
+
+/* Map slide-up panel animation */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px) translateX(-50%); }
+  to   { opacity: 1; transform: translateY(0)   translateX(-50%); }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease both;
+}
+
+/* Leaflet cluster overrides */
+.leaflet-cluster-anim .leaflet-marker-icon,
+.leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+

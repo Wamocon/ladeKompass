@@ -1,0 +1,73 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/lib/**"
+      - "src/app/api/**"
+      - "vitest.config.ts"
+      - "package.json"
+      - "tsconfig.json"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "src/lib/**"
+      - "src/app/api/**"
+      - "vitest.config.ts"
+      - "package.json"
+      - "tsconfig.json"
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat coverage/coverage-summary.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          total = data.get('total', {})
+          for key in ['lines', 'statements', 'functions', 'branches']:
+              pct = total.get(key, {}).get('pct', 'N/A')
+              covered = total.get(key, {}).get('covered', 'N/A')
+              ttl = total.get(key, {}).get('total', 'N/A')
+              print(f'{key:<12}: {pct}% ({covered}/{ttl})')
+          " >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
