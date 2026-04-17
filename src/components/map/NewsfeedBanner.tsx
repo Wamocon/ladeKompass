@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { X, Tag, Zap, Wifi, WifiOff, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { EvStationIcon } from "./EvStationIcon";
 import type { OCMStation } from "@/app/api/stations/route";
 
 interface NewsfeedBannerProps {
@@ -101,6 +102,7 @@ export function NewsfeedBanner({ stations, userLocation, isNavActive }: Newsfeed
         {/* Header bar */}
         <div className="flex items-center gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-t-2xl px-3 py-2 shadow-xl">
           <Tag size={13} className="text-green-600 dark:text-green-400 shrink-0" />
+          <EvStationIcon size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
           <span className="flex-1 text-xs font-bold text-zinc-700 dark:text-zinc-200">
             Günstigste Ladepunkte im Umkreis 50 km
           </span>
@@ -131,10 +133,22 @@ export function NewsfeedBanner({ stations, userLocation, isNavActive }: Newsfeed
                   key={station.ID}
                   className="flex flex-col gap-1.5 w-44 shrink-0 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3 py-2.5 border border-zinc-100 dark:border-zinc-700 hover:border-green-400 dark:hover:border-green-600 transition-colors cursor-pointer"
                 >
-                  {/* Station name */}
-                  <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100 leading-tight line-clamp-2">
-                    {station.AddressInfo.Title}
-                  </p>
+                  {/* Station name + EV icon */}
+                  <div className="flex items-start gap-1.5">
+                    <EvStationIcon
+                      size={16}
+                      className={
+                        station.StatusType?.IsOperational === true
+                          ? "text-green-600 dark:text-green-400 shrink-0 mt-0.5"
+                          : station.StatusType?.IsOperational === false
+                          ? "text-red-500 shrink-0 mt-0.5"
+                          : "text-zinc-400 shrink-0 mt-0.5"
+                      }
+                    />
+                    <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100 leading-tight line-clamp-2">
+                      {station.AddressInfo.Title}
+                    </p>
+                  </div>
 
                   {/* Status + distance row */}
                   <div className="flex items-center gap-1.5 flex-wrap">

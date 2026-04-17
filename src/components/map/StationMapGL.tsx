@@ -7,15 +7,15 @@ import type { StationFiltersState } from "./StationFilters";
 import type { OCMStation } from "@/app/api/stations/route";
 import type { PlannedChargingStop } from "@/lib/charging-stops";
 
-export type MapStyle = "light" | "dark" | "satellite" | "standard" | "3d";
+export type MapStyle = "light" | "dark" | "bright" | "standard";
 
 // --- Free tile style URLs (no API key required) ----------------------------
+// OpenFreeMap public styles — no key needed
 const STYLE_URLS: Record<MapStyle, string> = {
-  light:     "https://tiles.openfreemap.org/styles/positron",
-  dark:      "https://tiles.openfreemap.org/styles/dark-matter",
-  satellite: "https://tiles.openfreemap.org/styles/liberty",
-  standard:  "https://tiles.openfreemap.org/styles/liberty",
-  "3d":      "https://tiles.openfreemap.org/styles/liberty",
+  light:    "https://tiles.openfreemap.org/styles/positron",
+  dark:     "https://tiles.openfreemap.org/styles/dark-matter",
+  bright:   "https://tiles.openfreemap.org/styles/bright",
+  standard: "https://tiles.openfreemap.org/styles/liberty",
 };
 
 // CSS for pulsing user-location dot (injected once)
@@ -623,6 +623,9 @@ export function StationMapGL({
       }
       // 3D buildings
       toggle3D(map, show3D);
+      // Always keep route lines on top of buildings
+      if (map.getLayer("route-line-outline")) map.moveLayer("route-line-outline");
+      if (map.getLayer("route-line")) map.moveLayer("route-line");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapStyle]);
@@ -664,7 +667,9 @@ export function StationMapGL({
     const map = mapRef.current;
     if (!map) return;
     toggle3D(map, show3D);
-     
+    // Keep route lines on top of buildings whenever 3D state changes
+    if (map.getLayer("route-line-outline")) map.moveLayer("route-line-outline");
+    if (map.getLayer("route-line")) map.moveLayer("route-line");
   }, [show3D]);
 
   // --- Heatmap toggle -------------------------------------------------------

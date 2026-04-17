@@ -12,8 +12,9 @@ import type { StationFiltersState } from "./StationFilters";
 import type { OCMStation } from "@/app/api/stations/route";
 import type { PlannedChargingStop } from "@/lib/charging-stops";
 import { NewsfeedBanner } from "./NewsfeedBanner";
+import { EvStationIcon } from "./EvStationIcon";
 import {
-  Zap, MapPin, ChevronRight, Wifi, WifiOff, HelpCircle,
+  Zap, ChevronRight, Wifi, WifiOff, HelpCircle,
   Navigation as NavIcon, Layers, Target, BarChart2, ChevronDown, ChevronUp,
   Download, Thermometer, Box, Clock, X,
 } from "lucide-react";
@@ -59,11 +60,10 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
 // â”€â”€â”€ Map style config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const MAP_STYLES: Array<{ key: MapStyle; label: string; emoji: string }> = [
-  { key: "light", label: "Hell", emoji: "☀️" },
-  { key: "dark", label: "Dunkel", emoji: "🌙" },
-  { key: "satellite", label: "Satellit", emoji: "🛰️" },
-  { key: "standard", label: "Standard", emoji: "🗺️" },
-  { key: "3d", label: "3D", emoji: "🏙️" },
+  { key: "light",    label: "Hell",     emoji: "\u2600\uFE0F" },
+  { key: "dark",     label: "Dunkel",   emoji: "\uD83C\uDF19" },
+  { key: "bright",   label: "Farbig",   emoji: "\uD83D\uDDFA\uFE0F" },
+  { key: "standard", label: "Standard", emoji: "\uD83C\uDFD9\uFE0F" },
 ];
 
 const BNETZA_URL =
@@ -508,10 +508,10 @@ export default function StationMapWrapper() {
             </div>
           </PanelSection>
 
-          {/* â”€â”€ Stationsliste â”€â”€â”€ */}
+          {/* ── Stationsliste ─── */}
           <PanelSection
             title="Stationen"
-            icon={<MapPin size={13} />}
+            icon={<EvStationIcon size={13} />}
             badge={displayedStations.length}
           >
             {displayedStations.length === 0 ? (
@@ -532,9 +532,15 @@ export default function StationMapWrapper() {
                   >
                     <StatusDot station={s} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100 truncate">
-                        {s.AddressInfo.Title}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <EvStationIcon size={13} className={
+                          s.StatusType?.IsOperational === true ? "text-green-600 dark:text-green-400" :
+                          s.StatusType?.IsOperational === false ? "text-red-500" : "text-zinc-400"
+                        } />
+                        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                          {s.AddressInfo.Title}
+                        </p>
+                      </div>
                       <p className="text-[10px] text-zinc-400 truncate">{s.AddressInfo.Town}</p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -557,7 +563,7 @@ export default function StationMapWrapper() {
             <div className="space-y-1.5">
               <button
                 type="button"
-                onClick={() => { setShow3D((v) => !v); setMapStyle(show3D ? "standard" : "3d"); }}
+                onClick={() => setShow3D((v) => !v)}
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
                   show3D
                     ? "bg-sky-50 dark:bg-sky-900/30 border-sky-400 text-sky-700 dark:text-sky-300"
@@ -578,6 +584,7 @@ export default function StationMapWrapper() {
                     ? "bg-orange-50 dark:bg-orange-900/30 border-orange-400 text-orange-700 dark:text-orange-300"
                     : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-orange-400 hover:text-orange-600"
                 }`}
+                title="Zeigt eine Dichteverteilung aller Ladestationen als Heatmap an"
               >
                 <Thermometer size={12} />
                 Heatmap-Ansicht
