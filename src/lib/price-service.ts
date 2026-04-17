@@ -25,15 +25,25 @@ export interface PriceData {
 }
 
 // ─── OCM UsageCost parser ─────────────────────────────────────────────────────
-// NOTE: All regexes use bounded quantifiers ({0,N}) instead of unbounded * to
-// prevent ReDoS (polynomial backtracking) on user-controlled OCM input strings.
+// ReDoS-safe regexes: the two adjacent whitespace quantifiers that surrounded an
+// optional currency group were ambiguous (polynomial backtracking). Each pattern
+// now uses mutually-exclusive branches so the engine has at most one path to try.
+// [ \t]{0,N}(currency)[ \t]{0,N}  →  (currency-branch | space-only-branch)
 
 const FREE_PATTERNS = /kostenlos|free|gratis|0[,. ]00[ \t]{0,10}€/i;
-const KWH_PATTERN   = /(\d+[.,]\d+)[ \t]{0,10}(?:€|EUR|CHF|GBP)?[ \t]{0,10}\/[ \t]{0,5}kWh/i;
-const KWH_PATTERN2  = /(?:€|EUR|CHF|GBP)[ \t]{0,10}(\d+[.,]\d+)[ \t]{0,10}\/[ \t]{0,5}kWh/i;
-const MIN_PATTERN   = /(\d+[.,]\d+)[ \t]{0,10}(?:€|EUR|CHF|GBP)?[ \t]{0,10}\/[ \t]{0,5}min/i;
-const SESSION_PATTERN = /(\d+[.,]\d+)[ \t]{0,10}(?:€|EUR|CHF|GBP)?[ \t]{0,5}(?:\/[ \t]{0,5})?(?:session|sitzung|start|verbindung|aktivierung)/i;
-const SESSION_FLAT    = /(?:session|sitzung|start|verbindung)[ \t,.:]{0,30}(\d+[.,]\d+)/i;
+
+// "0.39 €/kWh" or "0.39/kWh" — currency+spaces XOR spaces-only, never both paths
+const KWH_PATTERN = /(\d+[.,]\d+)(?:[ \t]{0,10}(?:€|EUR|CHF|GBP)[ \t]{0,10}|[ \t]{0,20})\/[ \t]{0,5}kWh/i;
+const KWH_PATTERN2 = /(?:€|EUR|CHF|GBP)[ \t]{0,10}(\d+[.,]\d+)[ \t]{0,10}\/[ \t]{0,5}kWh/i;
+
+// "0.39 €/min" or "0.39/min"
+const MIN_PATTERN = /(\d+[.,]\d+)(?:[ \t]{0,10}(?:€|EUR|CHF|GBP)[ \t]{0,10}|[ \t]{0,20})\/[ \t]{0,5}min/i;
+
+// "0.39 €/session" or "0.39/session"
+const SESSION_PATTERN = /(\d+[.,]\d+)(?:[ \t]{0,10}(?:€|EUR|CHF|GBP)[ \t]{0,5}|[ \t]{0,15})(?:\/[ \t]{0,5})?(?:session|sitzung|start|verbindung|aktivierung)/i;
+
+// "session: 0.39" — separator must NOT contain '.' or ',' (they overlap with price [.,])
+const SESSION_FLAT = /(?:session|sitzung|start|verbindung)[ \t:]{0,15}(\d+[.,]\d+)/i;
 
 function parseNum(s: string): number {
   return parseFloat(s.replace(",", "."));
@@ -42,7 +52,12 @@ function parseNum(s: string): number {
 export function parseUsageCost(raw: string | undefined | null): PriceData | null {
   if (!raw?.trim()) return null;
 
-  if (FREE_PATTERNS.test(raw)) {
+  // Cap input length to break the taint chain: even with safe regexes, applying
+  // them to an unbounded user-controlled string is flagged by static analysis.
+  // OCM UsageCost is a short display field; 500 chars is far more than enough.
+  const input = raw.slice(0, 500);
+
+  if (FREE_PATTERNS.test(input)) {
     return {
       lines: [],
       rawText: raw,
@@ -56,21 +71,21 @@ export function parseUsageCost(raw: string | undefined | null): PriceData | null
   const lines: PriceLine[] = [];
 
   // kWh price
-  const kwh1 = raw.match(KWH_PATTERN);
-  const kwh2 = raw.match(KWH_PATTERN2);
+  const kwh1 = input.match(KWH_PATTERN);
+  const kwh2 = input.match(KWH_PATTERN2);
   const kwhMatch = kwh1 ?? kwh2;
   if (kwhMatch) {
     lines.push({ label: "Energie", amount: parseNum(kwhMatch[1]), unit: "€/kWh" });
   }
 
   // Per-minute price
-  const minMatch = raw.match(MIN_PATTERN);
+  const minMatch = input.match(MIN_PATTERN);
   if (minMatch) {
     lines.push({ label: "Standzeit", amount: parseNum(minMatch[1]), unit: "€/min" });
   }
 
   // Session fee
-  const sessMatch = raw.match(SESSION_PATTERN) ?? raw.match(SESSION_FLAT);
+  const sessMatch = input.match(SESSION_PATTERN) ?? input.match(SESSION_FLAT);
   if (sessMatch) {
     lines.push({ label: "Verbindungsgebühr", amount: parseNum(sessMatch[1]), unit: "€" });
   }
