@@ -22,6 +22,10 @@
 
 name: Deploy to Vercel
 
+# Restrict GITHUB_TOKEN to the minimum required — no write permissions needed
+# for a pure deployment caller workflow.
+permissions: {}
+
 on:
   workflow_dispatch:
     inputs:

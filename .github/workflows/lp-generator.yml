@@ -3,6 +3,11 @@ name: Reusable LP Generator (Central Logic)
 # workflow_call allows this workflow to be called by other repositories in the Org
 on:
   workflow_call:
+
+# Restrict GITHUB_TOKEN — repo operations use ORG_PAT secret, not GITHUB_TOKEN.
+# Only contents:read is needed for the checkout step.
+permissions:
+  contents: read
     inputs:
       template_repo:
         description: "The repository used as the design template"

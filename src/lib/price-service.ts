@@ -25,13 +25,15 @@ export interface PriceData {
 }
 
 // ─── OCM UsageCost parser ─────────────────────────────────────────────────────
+// NOTE: All regexes use bounded quantifiers ({0,N}) instead of unbounded * to
+// prevent ReDoS (polynomial backtracking) on user-controlled OCM input strings.
 
-const FREE_PATTERNS = /kostenlos|free|gratis|0[\s,.]00\s*€/i;
-const KWH_PATTERN   = /(\d+[.,]\d+)\s*(?:€|EUR|CHF|GBP)?\s*\/\s*kWh/i;
-const KWH_PATTERN2  = /(?:€|EUR|CHF|GBP)\s*(\d+[.,]\d+)\s*\/\s*kWh/i;
-const MIN_PATTERN   = /(\d+[.,]\d+)\s*(?:€|EUR|CHF|GBP)?\s*\/\s*min/i;
-const SESSION_PATTERN = /(\d+[.,]\d+)\s*(?:€|EUR|CHF|GBP)?\s*(?:\/?\s*(?:session|sitzung|start|verbindung|aktivierung))/i;
-const SESSION_FLAT    = /(?:session|sitzung|start|verbindung)[^\d]*(\d+[.,]\d+)/i;
+const FREE_PATTERNS = /kostenlos|free|gratis|0[,. ]00[ \t]{0,10}€/i;
+const KWH_PATTERN   = /(\d+[.,]\d+)[ \t]{0,10}(?:€|EUR|CHF|GBP)?[ \t]{0,10}\/[ \t]{0,5}kWh/i;
+const KWH_PATTERN2  = /(?:€|EUR|CHF|GBP)[ \t]{0,10}(\d+[.,]\d+)[ \t]{0,10}\/[ \t]{0,5}kWh/i;
+const MIN_PATTERN   = /(\d+[.,]\d+)[ \t]{0,10}(?:€|EUR|CHF|GBP)?[ \t]{0,10}\/[ \t]{0,5}min/i;
+const SESSION_PATTERN = /(\d+[.,]\d+)[ \t]{0,10}(?:€|EUR|CHF|GBP)?[ \t]{0,5}(?:\/[ \t]{0,5})?(?:session|sitzung|start|verbindung|aktivierung)/i;
+const SESSION_FLAT    = /(?:session|sitzung|start|verbindung)[ \t,.:]{0,30}(\d+[.,]\d+)/i;
 
 function parseNum(s: string): number {
   return parseFloat(s.replace(",", "."));

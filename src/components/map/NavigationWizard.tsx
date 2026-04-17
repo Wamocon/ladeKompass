@@ -502,7 +502,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                   {remainingDist !== null ? `Noch ${fmtDist(remainingDist)}` : "\u2014"}
                 </span>
                 {remainingTime !== null && (
-                  <span className="text-sm text-zinc-400">\u00b7 ca. {fmtTime(remainingTime)}</span>
+                  <span className="text-sm text-zinc-400">{"\u00b7"} ca. {fmtTime(remainingTime)}</span>
                 )}
                 {chargingPlan && chargingPlan.stops.length > 0 && remainingDist !== null && route && (() => {
                   const driven = route.distance - remainingDist;
