@@ -30,7 +30,8 @@ export function middleware(request: NextRequest) {
 
     if (!hasSession) {
       const locale = pathname.match(/^\/(de|en)/)?.[1] ?? "de";
-      const loginUrl = new URL(`/${locale}/auth/login`, request.url);
+      // Use request.nextUrl.origin (framework-validated) to prevent Host-header injection
+      const loginUrl = new URL(`/${locale}/auth/login`, request.nextUrl.origin);
       // Only store the current path as redirectTo — must be a valid internal path
       if (pathname.startsWith("/") && !pathname.startsWith("//")) {
         loginUrl.searchParams.set("redirectTo", pathname);

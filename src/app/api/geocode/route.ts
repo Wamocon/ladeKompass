@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams } = request.nextUrl;
   const q = searchParams.get("q");
   if (!q || q.length < 3) {
     return NextResponse.json([]);
