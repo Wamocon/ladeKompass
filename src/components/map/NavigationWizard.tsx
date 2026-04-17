@@ -63,6 +63,8 @@ interface NavigationWizardProps {
   onNavStop?: () => void;
   /** Called whenever charging stops are planned or cleared */
   onChargingStops?: (stops: PlannedChargingStop[]) => void;
+  /** Called when navigation active state changes */
+  onNavActiveChange?: (active: boolean) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -244,7 +246,7 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
 
 type PanelState = "expanded" | "collapsed" | "hidden";
 
-export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, onNavStop, onChargingStops }: NavigationWizardProps) {
+export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, onNavStop, onChargingStops, onNavActiveChange }: NavigationWizardProps) {
   const [panelState, setPanelState] = useState<PanelState>("expanded");
   const [from, setFrom] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [to, setTo] = useState({ label: "", lat: null as number | null, lng: null as number | null });
@@ -370,6 +372,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   function startNavigation() {
     if (!navigator.geolocation) { setError("GPS nicht verfügbar."); return; }
     setIsNavActive(true);
+    onNavActiveChange?.(true);
     setCurrentStepIdx(0);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -407,6 +410,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   function stopNavigation() {
     if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
     setIsNavActive(false);
+    onNavActiveChange?.(false);
     onNavStop?.();
   }
 
@@ -426,6 +430,107 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   const canCalculate = !loading && ((from.lat !== null && to.lat !== null) || (from.label.trim().length >= 3 && to.label.trim().length >= 3));
   const currentStep = route?.steps[currentStepIdx];
   const nextStep = route?.steps[currentStepIdx + 1];
+
+  // ── Google Maps-style bottom HUD during active navigation ────────────────
+  if (isNavActive) {
+    return (
+      <>
+        {/* Mini status pill — top-right */}
+        <div className="absolute top-3 right-3 z-[700]">
+          <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl px-3.5 py-2.5 shadow-2xl border border-blue-500/30">
+            <Navigation size={14} className="shrink-0" />
+            {remainingDist !== null && (
+              <span className="text-sm font-black">{fmtDist(remainingDist)}</span>
+            )}
+            {remainingTime !== null && (
+              <span className="text-xs text-blue-200 font-medium">· {fmtTime(remainingTime)}</span>
+            )}
+            <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full font-bold animate-pulse ml-1">LIVE</span>
+            <button
+              type="button"
+              onClick={stopNavigation}
+              className="ml-1 bg-red-500/80 hover:bg-red-500 text-white rounded-full p-1.5 transition-colors"
+              title="Navigation stoppen"
+            >
+              <Square size={10} />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom-center Google Maps-style HUD */}
+        {currentStep && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[700]" style={{ width: "min(90vw, 520px)" }}>
+            <div className="bg-[#0f172a]/96 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden border border-white/10">
+
+              {/* Main maneuver row */}
+              <div className="flex items-center gap-4 px-5 py-4">
+                <div className="bg-blue-600 rounded-2xl p-4 shrink-0 shadow-lg">
+                  <ManeuverIcon type={currentStep.maneuver.type} modifier={currentStep.maneuver.modifier} size={42} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-4xl font-black text-white leading-none">
+                    {distToNext !== null ? fmtDist(distToNext) : fmtDist(currentStep.distance)}
+                  </p>
+                  {currentStep.maneuver.modifier && (
+                    <p className="text-sm font-bold text-blue-400 mt-0.5">
+                      {modifierLabel(currentStep.maneuver.modifier)}
+                    </p>
+                  )}
+                  <p className="text-base font-semibold text-zinc-200 truncate mt-0.5">
+                    {nextStep
+                      ? `\u2192 ${nextStep.name || nextStep.maneuver.type}`
+                      : currentStep.name || "Ziel erreicht"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Lane indicator */}
+              {(() => {
+                const lanes = currentStep.intersections?.[0]?.lanes;
+                return lanes && lanes.length > 0 ? (
+                  <div className="px-5 pb-3 -mt-1">
+                    <p className="text-[9px] text-blue-400/70 uppercase tracking-wider mb-1.5 font-bold">Spurempfehlung</p>
+                    <LaneIndicator lanes={lanes} />
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Status row */}
+              <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.04] border-t border-white/[0.06]">
+                <MapPin size={13} className="text-zinc-500 shrink-0" />
+                <span className="text-sm font-semibold text-zinc-200">
+                  {remainingDist !== null ? `Noch ${fmtDist(remainingDist)}` : "\u2014"}
+                </span>
+                {remainingTime !== null && (
+                  <span className="text-sm text-zinc-400">\u00b7 ca. {fmtTime(remainingTime)}</span>
+                )}
+                {chargingPlan && chargingPlan.stops.length > 0 && remainingDist !== null && route && (() => {
+                  const driven = route.distance - remainingDist;
+                  const nextStop = chargingPlan.stops.find((s) => s.distanceFromStartM > driven);
+                  if (!nextStop) return null;
+                  const distToStop = Math.max(0, nextStop.distanceFromStartM - driven);
+                  return (
+                    <span className="flex items-center gap-1 text-xs text-orange-300 font-semibold">
+                      <BatteryCharging size={11} className="shrink-0 text-orange-400" />
+                      Laden in {fmtDist(distToStop)}
+                    </span>
+                  );
+                })()}
+                <button
+                  type="button"
+                  onClick={stopNavigation}
+                  className="ml-auto flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition-colors"
+                >
+                  <Square size={11} />
+                  Stopp
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   if (panelState === "hidden") {
     return (

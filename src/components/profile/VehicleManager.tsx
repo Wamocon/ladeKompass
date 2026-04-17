@@ -16,6 +16,7 @@ const CONNECTOR_COLORS: Record<string, string> = {
 
 function ExpiryBadge({ label, date }: { label: string; date?: string }) {
   if (!date) return null;
+  // eslint-disable-next-line react-hooks/purity
   const days = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
   const isWarn = days < 60;
   const isExpired = days < 0;

@@ -7,7 +7,9 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type");
   // Detect locale from URL path prefix (e.g. /de/auth/callback → de)
   const pathLocale = request.nextUrl.pathname.split("/")[1] ?? "de";
-  const next = searchParams.get("next") ?? `/${pathLocale}/dashboard`;
+  // Validate next param to prevent open redirect (must start with /x not //)
+  const rawNext = searchParams.get("next");
+  const next = rawNext && /^\/[^/]/.test(rawNext) ? rawNext : `/${pathLocale}/dashboard`;
 
   if (code) {
     const supabase = await createClient();

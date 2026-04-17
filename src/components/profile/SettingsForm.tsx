@@ -6,6 +6,30 @@ import {
   Save, Loader2, Eye, EyeOff, Download, AlertTriangle,
   Bell, MapPin, Zap, User, Lock,
 } from "lucide-react";
+
+function Msg({ msgs, k }: { msgs: Record<string, string>; k: string }) {
+  return msgs[k] ? (
+    <span className={`text-xs ${msgs[k].includes("\u2713") ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+      {msgs[k]}
+    </span>
+  ) : null;
+}
+
+function SaveButton({ isPending, section, onClick }: { isPending: boolean; section: string; onClick: () => void }) {
+  const t = useTranslations("settings");
+  return (
+    <button
+      type="button"
+      disabled={isPending}
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-xl bg-(--primary) hover:bg-(--primary-hover) text-white text-xs font-semibold px-3 py-1.5 transition-colors disabled:opacity-60"
+    >
+      {isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+      {t("save", { fallback: "Speichern" })}
+      <span className="sr-only">({section})</span>
+    </button>
+  );
+}
 import { updateProfile, changePassword, exportMyData } from "@/lib/actions/profile";
 import type { ProfileUpdateInput } from "@/lib/actions/profile";
 
@@ -117,26 +141,6 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
     URL.revokeObjectURL(url);
   }
 
-  const Msg = ({ k }: { k: string }) =>
-    msgs[k] ? (
-      <span className={`text-xs ${msgs[k].includes("\u2713") ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
-        {msgs[k]}
-      </span>
-    ) : null;
-
-  const SaveButton = ({ section, onClick }: { section: string; onClick: () => void }) => (
-    <button
-      type="button"
-      disabled={isPending}
-      onClick={onClick}
-      className="flex items-center gap-1.5 rounded-xl bg-(--primary) hover:bg-(--primary-hover) text-white text-xs font-semibold px-3 py-1.5 transition-colors disabled:opacity-60"
-    >
-      {isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-      {t("save", { fallback: "Speichern" })}
-      <span className="sr-only">({section})</span>
-    </button>
-  );
-
   return (
     <div className="space-y-5">
 
@@ -183,6 +187,7 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
           </div>
           <div className="flex items-center justify-between pt-1">
             <SaveButton
+              isPending={isPending}
               section="profile"
               onClick={() => saveSection("profile", {
                 display_name: profile.display_name || undefined,
@@ -190,7 +195,7 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
                 bio: profile.bio || undefined,
               })}
             />
-            <Msg k="profile" />
+            <Msg msgs={msgs} k="profile" />
           </div>
         </div>
       </section>
@@ -223,13 +228,14 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
           <p className="text-[11px] text-(--text-muted)">Wird für Routenvorschläge und Umkreissuche verwendet.</p>
           <div className="flex items-center justify-between pt-1">
             <SaveButton
+              isPending={isPending}
               section="locations"
               onClick={() => saveSection("locations", {
                 home_address: profile.home_address || undefined,
                 work_address: profile.work_address || undefined,
               })}
             />
-            <Msg k="locations" />
+            <Msg msgs={msgs} k="locations" />
           </div>
         </div>
       </section>
@@ -240,7 +246,7 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
           <Bell size={16} className="text-(--primary)" />
           <h2 className="text-sm font-bold text-(--text-base)">{t("notifications_title", { fallback: "Benachrichtigungen" })}</h2>
         </div>
-        <Msg k="notif" />
+        <Msg msgs={msgs} k="notif" />
         <div className="space-y-4 mt-1">
           {(
             [
@@ -321,6 +327,7 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
           </div>
           <div className="flex items-center justify-between pt-1">
             <SaveButton
+              isPending={isPending}
               section="charging"
               onClick={() => saveSection("charging", {
                 preferred_connector: profile.preferred_connector || undefined,
@@ -328,7 +335,7 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
                 charge_stop_soc: profile.charge_stop_soc,
               })}
             />
-            <Msg k="charging" />
+            <Msg msgs={msgs} k="charging" />
           </div>
         </div>
       </section>
@@ -367,7 +374,7 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
               className={inputCls}
             />
           </div>
-          <Msg k="pw" />
+          <Msg msgs={msgs} k="pw" />
           <button
             type="button"
             disabled={isPending || !pwForm.newPassword}

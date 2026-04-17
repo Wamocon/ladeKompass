@@ -43,7 +43,7 @@ export function RoutePlanner() {
   const [error, setError] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const lastInputRef = useRef<CalculateRouteInput | null>(null);
+  const [lastInput, setLastInput] = useState<CalculateRouteInput | null>(null);
 
   const [start, setStart] = useState<LocationState>(emptyLocation());
   const [end, setEnd] = useState<LocationState>(emptyLocation());
@@ -129,7 +129,7 @@ export function RoutePlanner() {
       currentSocPercent,
       minArrivalSocPercent,
     };
-    lastInputRef.current = routeInput;
+    setLastInput(routeInput);
 
     startTransition(async () => {
       const res = await calculateRoute(routeInput);
@@ -142,12 +142,12 @@ export function RoutePlanner() {
   }
 
   async function handleSave() {
-    if (!result || !lastInputRef.current) return;
+    if (!result || !lastInput) return;
     setSaving(true);
     const { id, error: saveErr } = await saveRoute({
-      name: `${lastInputRef.current.startName} → ${lastInputRef.current.endName}`,
+      name: `${lastInput.startName} → ${lastInput.endName}`,
       result,
-      input: lastInputRef.current,
+      input: lastInput,
     });
     setSaving(false);
     if (!saveErr) setSavedId(id);
@@ -348,11 +348,11 @@ export function RoutePlanner() {
             >
               {t("view_archive", { fallback: "Archiv anzeigen →" })}
             </a>
-            {lastInputRef.current && (
+            {lastInput && (
               <button
                 type="button"
                 onClick={() => {
-                  const inp = lastInputRef.current;
+                  const inp = lastInput;
                   if (!inp) return;
                   const preset = {
                     fromLabel: inp.startName,

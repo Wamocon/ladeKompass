@@ -11,6 +11,7 @@ import type { NavRoutePreset } from "./NavigationWizard";
 import type { StationFiltersState } from "./StationFilters";
 import type { OCMStation } from "@/app/api/stations/route";
 import type { PlannedChargingStop } from "@/lib/charging-stops";
+import { NewsfeedBanner } from "./NewsfeedBanner";
 import {
   Zap, MapPin, ChevronRight, Wifi, WifiOff, HelpCircle,
   Navigation as NavIcon, Layers, Target, BarChart2, ChevronDown, ChevronUp,
@@ -131,9 +132,22 @@ export default function StationMapWrapper() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(null);
+  const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem("lk_nav_preset");
+      if (raw) {
+        localStorage.removeItem("lk_nav_preset");
+        return JSON.parse(raw) as NavRoutePreset;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  });
   const [navPosition, setNavPosition] = useState<[number, number, number] | null>(null);
   const [chargingStops, setChargingStops] = useState<PlannedChargingStop[]>([]);
+  const [isNavActive, setIsNavActive] = useState(false);
 
   useEffect(() => {
     if (navigator?.geolocation) {
@@ -146,17 +160,6 @@ export default function StationMapWrapper() {
         () => {},
         { timeout: 6000 },
       );
-    }
-    // Load nav preset from route planner (if navigated here with "Navigation starten")
-    try {
-      const raw = localStorage.getItem("lk_nav_preset");
-      if (raw) {
-        const parsed = JSON.parse(raw) as NavRoutePreset;
-        setNavPreset(parsed);
-        localStorage.removeItem("lk_nav_preset");
-      }
-    } catch {
-      // ignore
     }
   }, []);
 
@@ -631,11 +634,19 @@ export default function StationMapWrapper() {
       {/* Navigation Wizard - right floating panel */}
       <NavigationWizard
         onRoute={(geoJSON) => setRouteGeoJSON(geoJSON)}
-        onClear={() => { setRouteGeoJSON(null); setNavPosition(null); setChargingStops([]); }}
+        onClear={() => { setRouteGeoJSON(null); setNavPosition(null); setChargingStops([]); setIsNavActive(false); }}
         preset={navPreset}
         onPositionUpdate={(pos) => setNavPosition(pos)}
-        onNavStop={() => setNavPosition(null)}
+        onNavStop={() => { setNavPosition(null); setIsNavActive(false); }}
         onChargingStops={(stops) => setChargingStops(stops)}
+        onNavActiveChange={(active) => setIsNavActive(active)}
+      />
+
+      {/* Newsfeed Banner - cheapest stations within 50km */}
+      <NewsfeedBanner
+        stations={visibleStations}
+        userLocation={userLocation}
+        isNavActive={isNavActive}
       />
 
       <StationMapGL

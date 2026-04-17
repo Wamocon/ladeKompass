@@ -114,8 +114,8 @@ export interface ChargepriceResult {
  */
 export async function fetchChargepriceData(
   ocmUUID: string,
-  lat: number,
-  lng: number,
+  _lat: number,
+  _lng: number,
 ): Promise<PriceData | null> {
   const key = process.env.CHARGEPRICE_API_KEY;
   if (!key) return null;

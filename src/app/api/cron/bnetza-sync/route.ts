@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { createServiceClient } from "@/lib/supabase/server";
 
 // BNetzA public XLSX download URL
@@ -67,11 +67,30 @@ export async function GET(request: NextRequest) {
   // --- 2. Parse XLSX ---------------------------------------------------------
   let rows: Record<string, string>[];
   try {
-    const workbook = XLSX.read(xlsxBuffer, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
-      defval: "",
+    const workbook = new ExcelJS.Workbook();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await workbook.xlsx.load(new Uint8Array(xlsxBuffer) as any);
+    const worksheet = workbook.worksheets[0];
+    const headers: string[] = [];
+    worksheet.getRow(1).eachCell({ includeEmpty: false }, (cell) => {
+      headers.push(String(cell.value ?? "").trim());
+    });
+    rows = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const rowData: Record<string, string> = {};
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const header = headers[colNumber - 1] ?? `col_${colNumber}`;
+        const val: unknown = cell.value;
+        if (typeof val === "object" && val !== null && !Array.isArray(val) && "richText" in val) {
+          rowData[header] = ((val as { richText: { text: string }[] }).richText ?? []).map(r => r.text).join("");
+        } else if (val instanceof Date) {
+          rowData[header] = val.toISOString().split("T")[0];
+        } else {
+          rowData[header] = val == null ? "" : String(val);
+        }
+      });
+      rows.push(rowData);
     });
   } catch (err) {
     return failSync(`XLSX parse error: ${String(err)}`);

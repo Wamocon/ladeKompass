@@ -190,6 +190,8 @@ export function StationMapGL({
   const abortRef     = useRef<AbortController | null>(null);
   const fetchTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialised  = useRef(false);
+  // Stores latest route data so it can be applied after style changes
+  const pendingRouteRef = useRef<GeoJSON.FeatureCollection | null>(null);
 
   // Inject animation CSS once
   useEffect(() => { injectCSS(); }, []);
@@ -362,9 +364,9 @@ export function StationMapGL({
         source: "route",
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color":   "#000",
-          "line-width":   7,
-          "line-opacity": 0.25,
+          "line-color":   "#1e3a5f",
+          "line-width":   10,
+          "line-opacity": 0.5,
         },
       });
       map.addLayer({
@@ -373,16 +375,17 @@ export function StationMapGL({
         source: "route",
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color":     "#3b82f6",
-          "line-width":     5,
-          "line-gradient":  [
-            "interpolate", ["linear"], ["line-progress"],
-            0, "#3b82f6",
-            1, "#8b5cf6",
-          ],
-          "line-opacity": 0.9,
+          "line-color":  "#3b82f6",
+          "line-width":  6,
+          "line-opacity": 1,
         },
       });
+
+      // Apply any route that arrived before the map finished loading
+      if (pendingRouteRef.current) {
+        (map.getSource("route") as maplibregl.GeoJSONSource)
+          .setData(pendingRouteRef.current);
+      }
 
       // Fetch initial data
       fetchStations(lat, lng);
@@ -608,6 +611,16 @@ export function StationMapGL({
         map.addLayer({ id: POINT_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], paint: { "circle-color": ["get", "color"], "circle-radius": ["interpolate", ["linear"], ["get", "maxKw"], 0, 6, 22, 8, 50, 10, 150, 13], "circle-stroke-width": 4, "circle-stroke-color": ["get", "glowColor"], "circle-stroke-opacity": 0.9, "circle-opacity": 1 } });
         map.addLayer({ id: HEATMAP_LAYER, type: "heatmap", source: SOURCE_ID, layout: { visibility: showHeatmap ? "visible" : "none" }, paint: { "heatmap-weight": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0, 350, 1], "heatmap-intensity": 1, "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,255,0)", 0.5, "royalblue", 1, "red"], "heatmap-radius": 20, "heatmap-opacity": 0.6 } });
       }
+      // Re-add route source/layers after style change
+      if (!map.getSource("route")) {
+        map.addSource("route", {
+          type: "geojson",
+          data: pendingRouteRef.current ?? { type: "FeatureCollection", features: [] },
+          lineMetrics: true,
+        });
+        map.addLayer({ id: "route-line-outline", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#1e3a5f", "line-width": 10, "line-opacity": 0.5 } });
+        map.addLayer({ id: "route-line", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#3b82f6", "line-width": 6, "line-opacity": 1 } });
+      }
       // 3D buildings
       toggle3D(map, show3D);
     });
@@ -703,28 +716,36 @@ export function StationMapGL({
 
   // --- Route GeoJSON update ------------------------------------------------
   useEffect(() => {
+    pendingRouteRef.current = routeGeoJSON ?? null;
     const map = mapRef.current;
     if (!map) return;
-    const src = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
-    if (!src) return;
-    src.setData(routeGeoJSON ?? { type: "FeatureCollection", features: [] });
 
-    // Fit map to route bounds if route has geometry
-    if (routeGeoJSON && routeGeoJSON.features.length > 0) {
-      const coords: [number, number][] = [];
-      for (const feature of routeGeoJSON.features) {
-        if (feature.geometry.type === "LineString") {
-          coords.push(...(feature.geometry.coordinates as [number, number][]));
+    function applyRoute() {
+      const src = map!.getSource("route") as maplibregl.GeoJSONSource | undefined;
+      if (!src) return false;
+      src.setData(routeGeoJSON ?? { type: "FeatureCollection", features: [] });
+      if (routeGeoJSON && routeGeoJSON.features.length > 0) {
+        const coords: [number, number][] = [];
+        for (const feature of routeGeoJSON.features) {
+          if (feature.geometry.type === "LineString") {
+            coords.push(...(feature.geometry.coordinates as [number, number][]));
+          }
+        }
+        if (coords.length > 1) {
+          const lngs = coords.map((c) => c[0]);
+          const lats = coords.map((c) => c[1]);
+          map!.fitBounds(
+            [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+            { padding: 80, duration: 900 },
+          );
         }
       }
-      if (coords.length > 1) {
-        const lngs = coords.map((c) => c[0]);
-        const lats = coords.map((c) => c[1]);
-        map.fitBounds(
-          [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-          { padding: 60, duration: 900 },
-        );
-      }
+      return true;
+    }
+
+    if (!applyRoute()) {
+      // Source not ready yet — retry on next styledata/load event
+      map.once("styledata", applyRoute);
     }
   }, [routeGeoJSON]);
 
