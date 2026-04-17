@@ -1,49 +1,280 @@
-# =============================================================================
-# Caller Workflow — Manual Vercel Deployment
-# =============================================================================
-# Source: Wamocon/github_workflow/examples/caller-production-deploy.yml
-#
-# Trigger : MANUAL ONLY — Actions tab → "Deploy to Vercel" → Run workflow
-#           Choose "production" (live URL) or "preview" (test URL) at run time.
-#           This workflow NEVER runs automatically.
-#
-# Secrets required:
-#   - VERCEL_PROJECT_ID → add this to your repo's GitHub secrets
-#                         (Vercel Project → Settings → General → Project ID)
-#
-# Already set at organisation level (no action needed):
-#   - VERCEL_TOKEN   → personal Vercel access token
-#   - VERCEL_ORG_ID  → Vercel personal account ID
-#
-# How it works:
-#   Builds locally via Vercel CLI — Vercel never sees the GitHub repo owner,
-#   so there are no "team seat" errors on a personal Hobby account in a GitHub org.
-# =============================================================================
+name: Reusable LP Generator (Central Logic)
 
-name: Deploy to Vercel
-
+# workflow_call allows this workflow to be called by other repositories in the Org
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      environment:
-        description: "Deploy target"
+      template_repo:
+        description: "The repository used as the design template"
         required: true
-        default: "production"
-        type: choice
-        options:
-          - production
-          - preview
-      db_schema:
-        description: "Optional NEXT_PUBLIC_DB_SCHEMA override (leave empty to use Vercel env vars)"
-        required: false
         type: string
-        default: ""
+      new_repo_name:
+        description: "The name of the landing page repository to be created"
+        required: true
+        type: string
+      ai_prompt:
+        description: "The specific instructions for GitHub Copilot"
+        required: true
+        type: string
+    secrets:
+      ORG_PAT:
+        description: "Token for repo creation and git operations (Org-scoped)"
+        required: true
+      COPILOT_PAT:
+        description: "Token with Copilot permissions (User-scoped)"
+        required: true
 
 jobs:
-  deploy:
-    name: Deploy — ${{ inputs.environment }}
-    uses: Wamocon/github_workflow/.github/workflows/deploy.yml@main
-    with:
-      vercel_env: ${{ inputs.environment }}
-      db_schema: ${{ inputs.db_schema }}
-    secrets: inherit
+  generate-lp:
+    runs-on: ubuntu-latest
+    steps:
+      # STEP 1: Checkout the current project source
+      # We need the README.md and code here so Copilot understands the product context.
+      - name: Checkout Project Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # Only latest commit needed; full history is not used
+
+      # STEP 1b: Resolve the final repository name
+      # If new_repo_name is the default sentinel "generated_lp", replace it with
+      # <caller-repo>_lp. If the resolved name already exists, append _v2, _v3, …
+      - name: Resolve repo name
+        id: resolve_name
+        env:
+          GH_TOKEN: ${{ secrets.ORG_PAT }}
+        run: |
+          if [[ "${{ inputs.new_repo_name }}" == "generated_lp" ]]; then
+            CALLER_NAME="${GITHUB_REPOSITORY##*/}"
+            BASE_NAME="${CALLER_NAME}_lp"
+          else
+            BASE_NAME="${{ inputs.new_repo_name }}"
+          fi
+
+          FINAL_NAME="$BASE_NAME"
+          VERSION=2
+          while gh repo view "${{ github.repository_owner }}/$FINAL_NAME" --json name > /dev/null 2>&1; do
+            FINAL_NAME="${BASE_NAME}_v${VERSION}"
+            VERSION=$((VERSION + 1))
+          done
+
+          echo "Resolved repo name: $FINAL_NAME"
+          echo "final_repo_name=$FINAL_NAME" >> "$GITHUB_OUTPUT"
+
+      # STEP 2: Create the new target repository in the Organization
+      # Using GitHub CLI (gh). The --internal flag ensures it stays within the Org.
+      - name: Create Target Repo
+        env:
+          GH_TOKEN: ${{ secrets.ORG_PAT }}
+        run: |
+          gh repo create ${{ github.repository_owner }}/${{ steps.resolve_name.outputs.final_repo_name }} --internal
+
+      # STEP 3: Fetch template and prepare the workspace
+      - name: Clone Template and Prepare
+        env:
+          GH_TOKEN: ${{ secrets.ORG_PAT }}
+        run: |
+          # Clone only the latest snapshot of the template (no history needed)
+          git clone --depth 1 https://${{ secrets.ORG_PAT }}@github.com/${{ inputs.template_repo }}.git template_source
+          # Create working directory and copy template files (excluding .git history)
+          mkdir target_repo
+          rsync -a --exclude='.git' template_source/ target_repo/
+          # Initialize git in the new folder and link it to the newly created repo
+          cd target_repo
+          git init
+          git remote add origin https://${{ secrets.ORG_PAT }}@github.com/${{ github.repository_owner }}/${{ steps.resolve_name.outputs.final_repo_name }}.git
+
+      # STEP 4: Prepare Copilot Infrastructure on the Runner
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache Copilot CLI
+        id: cache-copilot
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.npm-global
+          key: copilot-cli-${{ runner.os }}-v1
+
+      - name: Install Copilot CLI
+        if: steps.cache-copilot.outputs.cache-hit != 'true'
+        run: |
+          npm config set prefix /home/runner/.npm-global
+          npm install -g @github/copilot
+
+      - name: Add Copilot CLI to PATH
+        run: echo "/home/runner/.npm-global/bin" >> $GITHUB_PATH
+
+      # STEP 4b: Collect ALL product context into target_repo so Copilot can read it.
+      # Copilot's --allow-tool=read is sandboxed to the working directory; it cannot
+      # traverse to the parent workspace. We pre-bake everything into PRODUCT_CONTEXT.md
+      # and copy assets (icons, images) that should replace the template equivalents.
+      - name: Build Product Context
+        run: |
+          # ── 1. Write the text context file ──────────────────────────────────────
+          {
+            echo "# PRODUCT CONTEXT"
+            echo "## Source repository: $GITHUB_REPOSITORY"
+            echo "## Product name (derived from repo): ${GITHUB_REPOSITORY##*/}"
+            echo ""
+
+            # README is the primary source of truth
+            if [ -f README.md ]; then
+              echo "## README.md"
+              cat README.md
+              echo ""
+            fi
+
+            # All other markdown docs (docs/, legal-docs/, etc.) — skip >50 KB files
+            while IFS= read -r f; do
+              size=$(wc -c < "$f")
+              if [ "$size" -lt 50000 ]; then
+                echo "## $f"
+                cat "$f"
+                echo ""
+              fi
+            done < <(find . -name "*.md" -not -path "./.git/*" -not -name "README.md" | sort | head -40)
+
+            # package.json / app.json / pubspec.yaml — useful for app name & description
+            for meta in package.json app.json pubspec.yaml; do
+              if [ -f "$meta" ]; then
+                echo "## $meta"
+                cat "$meta"
+                echo ""
+              fi
+            done
+          } > target_repo/PRODUCT_CONTEXT.md
+          echo "Context file size: $(wc -c < target_repo/PRODUCT_CONTEXT.md) bytes"
+
+          # ── 2. Copy app icon / logo assets into target_repo/_source_assets/ ────
+          # Copilot will be told to use these to replace the template icon.
+          mkdir -p target_repo/_source_assets
+          # SVG icons (preferred)
+          find . -not -path "./.git/*" -not -path "./target_repo/*" \
+            \( -name "*.svg" -o -name "icon*.png" -o -name "logo*.png" \
+               -o -name "app-icon*.png" -o -name "app_icon*.png" \) \
+            | head -10 \
+            | while read -r f; do cp "$f" target_repo/_source_assets/; done
+          echo "Source assets copied: $(ls target_repo/_source_assets/ 2>/dev/null | wc -l) files"
+
+      # STEP 5: The AI Transformation (The Core)
+      # Copilot is sandboxed to target_repo/. All product info is in PRODUCT_CONTEXT.md.
+      # Assets to use are in _source_assets/. Shell/git tools are blocked by design.
+      # Prompt is written via a heredoc with body indented to 10 spaces so the YAML
+      # block scalar never breaks. YAML strips those 10 spaces; the shell sees col-0
+      # content, which is what heredocs require for the terminator to work correctly.
+      - name: Execute AI Transformation
+        timeout-minutes: 60
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
+        run: |
+          cat > /tmp/ai_prompt.txt << 'ENDPROMPT'
+          You are a professional bilingual (German/English) web developer.
+          Your task: produce a PRODUCTION-READY landing page by ADAPTING the existing
+          template files already in your working directory. Do NOT create a new design.
+
+          STEP 1 - READ PRODUCT CONTEXT (mandatory before touching any file):
+          Read PRODUCT_CONTEXT.md completely and extract:
+            - Product name and one-sentence value proposition
+            - 3 to 5 key features or benefits
+            - Target audience
+            - App store or download links (App Store, Play Store, web app URL)
+            - Brand colors if mentioned
+            - Company legal details (name, address, email)
+            - List of files in _source_assets/ - these are the product icons and logos
+
+          STEP 2 - READ ALL TEMPLATE FILES:
+          Read every existing file: index.html (and index.en.html if present),
+          style.css, script.js, impressum.html, datenschutz.html, agb.html,
+          app-icon-light.svg. Understand the exact HTML structure, CSS class names,
+          id attributes, and the bilingual mechanism (data-de/data-en or JS toggle).
+
+          STEP 3 - PLAN CHANGES before writing anything:
+          Identify only what must change:
+            a) Every occurrence of the old product or brand name
+            b) Hero headline and subheadline in both DE and EN
+            c) Feature and benefit section text in both DE and EN
+            d) CTA button labels and href links (use URLs from context)
+            e) App icon: use best file from _source_assets/ to replace app-icon-light.svg;
+               if none exists, redesign the SVG to represent this specific product
+            f) Primary CSS accent color only if product brand color is clearly identifiable
+            g) Legal pages: replace company name, address, email in all three files
+            h) Title tag and meta description on every HTML page
+
+          STEP 4 - ADAPT FILES (strict rules, one file at a time):
+            PRESERVE every HTML tag, CSS class, id, data-* attribute, and JS function.
+            PRESERVE the bilingual toggle mechanism exactly as it is in the template.
+            ONLY change: text content inside tags, href/src for relevant links, CSS colors.
+            Every user-facing string must have both a German and an English version.
+            Write each file in chunks of MAX 200 lines per write call.
+
+          STEP 5 - SELF-REVIEW (mandatory - re-read every HTML file you changed):
+            No old product name or placeholder text remains anywhere.
+            Every body text element has bilingual versions DE and EN.
+            All internal href anchors from the template still exist in output.
+            Legal pages have the correct new company details.
+            No unclosed HTML tags or broken CSS rules.
+
+          STEP 6 - CLEANUP:
+          Delete PRODUCT_CONTEXT.md and the _source_assets/ directory.
+          Do NOT run any shell commands, git commands, or attempt to commit or push.
+          The CI pipeline handles all git operations after you finish.
+          ENDPROMPT
+          echo "Project name: ${{ steps.resolve_name.outputs.final_repo_name }}" >> /tmp/ai_prompt.txt
+          echo "Caller instructions: ${{ inputs.ai_prompt }}" >> /tmp/ai_prompt.txt
+
+          PROMPT=$(cat /tmp/ai_prompt.txt)
+          cd target_repo
+          copilot -p "$PROMPT" --allow-tool=read --allow-tool=write --no-ask-user
+
+      # STEP 6: Upload results to the new repo
+      - name: Commit and Push
+        run: |
+          cd target_repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "feat: AI generated landing page via Central Workflow"
+          git branch -M main
+          git push -u origin main
+
+      # STEP 7: Activate GitHub Pages, make Public, and update "About" sections
+      - name: Finalize Deployment and Update Metadata
+        env:
+          GH_TOKEN: ${{ secrets.ORG_PAT }}
+        run: |
+          FINAL_NAME="${{ steps.resolve_name.outputs.final_repo_name }}"
+
+          # Wait until GitHub confirms the push exists (poll instead of fixed sleep)
+          echo "Waiting for push to be visible on GitHub..."
+          for i in $(seq 1 12); do
+            REF=$(gh api /repos/${{ github.repository_owner }}/$FINAL_NAME/git/refs/heads/main --jq '.ref' 2>/dev/null || echo "")
+            if [[ -n "$REF" ]]; then
+              echo "Push confirmed after $((i * 5))s"
+              break
+            fi
+            echo "  attempt $i/12 – not ready yet, retrying in 5s..."
+            sleep 5
+          done
+
+          gh api --method POST -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository_owner }}/$FINAL_NAME/pages \
+            -f source[branch]="main" -f source[path]="/"
+
+          # 2. Change visibility to Public so the world can see the page
+          gh repo edit ${{ github.repository_owner }}/$FINAL_NAME --visibility public --accept-visibility-change-consequences
+
+          # 3. Construct the Pages URL
+          # Format: https://orgname.github.io/reponame/
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/$FINAL_NAME/"
+
+          # 4. Update the "About" section of the NEW Landing Page Repo
+          gh repo edit ${{ github.repository_owner }}/$FINAL_NAME \
+            --description "Landing page for $FINAL_NAME - AI Generated" \
+            --homepage "$PAGES_URL"
+
+          # 5. Update the "About" section of the CURRENT Source Repo
+          # This puts the link right where the developers are working
+          gh repo edit ${{ github.repository }} --homepage "$PAGES_URL"
+          
+          echo "Success: Landing page '$FINAL_NAME' is live at $PAGES_URL"
