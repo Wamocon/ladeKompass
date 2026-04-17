@@ -5,8 +5,13 @@ import {
   Navigation, Loader2, X, ArrowRight, ArrowLeft, ArrowUp,
   RotateCcw, CornerUpLeft, CornerUpRight, MapPin, Search,
   ChevronDown, ChevronUp, Minus, Play, Square, AlertCircle,
-  CheckCircle,
+  CheckCircle, BatteryCharging, Zap,
 } from "lucide-react";
+import {
+  planChargingStops,
+  type PlannedChargingStop,
+  type ChargingStopPlan,
+} from "@/lib/charging-stops";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +30,15 @@ export interface OsrmStep {
   name: string;
   distance: number;
   duration: number;
+  /** OSRM intersection data — first element has lane info */
+  intersections?: Array<{
+    location: [number, number];
+    bearings: number[];
+    lanes?: Array<{
+      indications: string[];  // ["left"], ["straight"], ["right"], ["straight", "right"] etc.
+      valid: boolean;         // true = recommended lane
+    }>;
+  }>;
 }
 
 export interface OsrmRoute {
@@ -47,6 +61,8 @@ interface NavigationWizardProps {
   preset?: NavRoutePreset | null;
   onPositionUpdate?: (pos: [number, number, number]) => void;
   onNavStop?: () => void;
+  /** Called whenever charging stops are planned or cleared */
+  onChargingStops?: (stops: PlannedChargingStop[]) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -96,6 +112,37 @@ function modifierLabel(m?: string): string {
     uturn: "Wenden", straight: "Geradeaus",
   };
   return map[m] ?? m;
+}
+
+/** Lane indicator: shows which lanes to use at the next intersection */
+function LaneIndicator({ lanes }: { lanes: Array<{ indications: string[]; valid: boolean }> }) {
+  if (!lanes || lanes.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1 mt-2 px-1">
+      {lanes.map((lane, i) => {
+        const main = lane.indications[0];
+        return (
+          <div
+            key={i}
+            className={`flex flex-col items-center justify-end rounded px-1.5 py-1 min-w-[24px] border transition-all ${
+              lane.valid
+                ? "bg-white/20 border-white/60 scale-110"
+                : "bg-white/5 border-white/15 opacity-40"
+            }`}
+          >
+            {main === "left" || main === "sharp left" || main === "slight left"
+              ? <ArrowLeft size={10} className={lane.valid ? "text-white" : "text-white/40"} />
+              : main === "right" || main === "sharp right" || main === "slight right"
+              ? <ArrowRight size={10} className={lane.valid ? "text-white" : "text-white/40"} />
+              : main === "uturn"
+              ? <RotateCcw size={10} className={lane.valid ? "text-white" : "text-white/40"} />
+              : <ArrowUp size={10} className={lane.valid ? "text-white" : "text-white/40"} />
+            }
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── Geocode Input ────────────────────────────────────────────────────────────
@@ -197,7 +244,7 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
 
 type PanelState = "expanded" | "collapsed" | "hidden";
 
-export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, onNavStop }: NavigationWizardProps) {
+export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, onNavStop, onChargingStops }: NavigationWizardProps) {
   const [panelState, setPanelState] = useState<PanelState>("expanded");
   const [from, setFrom] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [to, setTo] = useState({ label: "", lat: null as number | null, lng: null as number | null });
@@ -211,6 +258,12 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const routeRef = useRef<OsrmRoute | null>(null);
+
+  // ── Charging-stop planning ──────────────────────────────────────────────
+  const [vehicleRangeKm, setVehicleRangeKm] = useState(300);
+  const [currentBattery, setCurrentBattery] = useState(80);
+  const [chargingPlan, setChargingPlan] = useState<ChargingStopPlan | null>(null);
+  const [planningStops, setPlanningStops] = useState(false);
 
   const geocode = useCallback(async (q: string): Promise<[number, number] | null> => {
     if (!q.trim()) return null;
@@ -227,7 +280,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setRoute(null);
     setLoading(true);
     setCurrentStepIdx(0);
-    const url = `https://router.project-osrm.org/route/v1/driving/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson&steps=true`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson&steps=true&annotations=true`;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`OSRM ${res.status}`);
@@ -248,12 +301,49 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     }
   }, [onRoute]);
 
+  const handlePlanStops = useCallback(async (r: OsrmRoute) => {
+    setPlanningStops(true);
+    try {
+      const plan = await planChargingStops(
+        r.geometry,
+        r.distance,
+        vehicleRangeKm,
+        currentBattery,
+      );
+      setChargingPlan(plan);
+      onChargingStops?.(plan.stops);
+    } catch {
+      // silently ignore planning errors
+    } finally {
+      setPlanningStops(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleRangeKm, currentBattery]);
+
   useEffect(() => {
     if (!preset) return;
-    setFrom({ label: preset.fromLabel, lat: preset.fromCoord[0], lng: preset.fromCoord[1] });
     setTo({ label: preset.toLabel, lat: preset.toCoord[0], lng: preset.toCoord[1] });
     setPanelState("expanded");
-    void calculateWithCoords(preset.fromCoord[0], preset.fromCoord[1], preset.toCoord[0], preset.toCoord[1]);
+
+    // If start is "Aktueller Standort", try to get fresh GPS before calculating
+    if (preset.fromLabel === "Aktueller Standort" && navigator?.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const fLat = pos.coords.latitude, fLng = pos.coords.longitude;
+          setFrom({ label: "Aktueller Standort", lat: fLat, lng: fLng });
+          void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
+        },
+        () => {
+          // GPS failed – use preset coords as fallback
+          setFrom({ label: preset.fromLabel, lat: preset.fromCoord[0], lng: preset.fromCoord[1] });
+          void calculateWithCoords(preset.fromCoord[0], preset.fromCoord[1], preset.toCoord[0], preset.toCoord[1]);
+        },
+        { timeout: 6000, enableHighAccuracy: true },
+      );
+    } else {
+      setFrom({ label: preset.fromLabel, lat: preset.fromCoord[0], lng: preset.fromCoord[1] });
+      void calculateWithCoords(preset.fromCoord[0], preset.fromCoord[1], preset.toCoord[0], preset.toCoord[1]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
 
@@ -326,6 +416,8 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setFrom({ label: "", lat: null, lng: null });
     setTo({ label: "", lat: null, lng: null });
     setCurrentStepIdx(0); setDistToNext(null);
+    setChargingPlan(null);
+    onChargingStops?.([]);
     onClear();
   }
 
@@ -385,6 +477,16 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                 <p className="text-xs text-blue-300 font-bold shrink-0">{modifierLabel(currentStep.maneuver.modifier)}</p>
               )}
             </div>
+            {/* Lane indicator — shown when intersection has lane data */}
+            {(() => {
+              const lanes = currentStep.intersections?.[0]?.lanes;
+              return lanes && lanes.length > 0 ? (
+                <div className="mt-2 px-1">
+                  <p className="text-[9px] text-blue-400 uppercase tracking-wider mb-1 font-bold">Spurempfehlung</p>
+                  <LaneIndicator lanes={lanes} />
+                </div>
+              ) : null;
+            })()}
             {remainingDist !== null && (
               <div className="mt-2 flex items-center gap-3 text-xs text-blue-300">
                 <span>Noch {fmtDist(remainingDist)}</span>
@@ -394,6 +496,20 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                 </button>
               </div>
             )}
+            {/* Next charging stop indicator */}
+            {chargingPlan && chargingPlan.stops.length > 0 && remainingDist !== null && route && (() => {
+              const driven = route.distance - remainingDist;
+              const next = chargingPlan.stops.find((s) => s.distanceFromStartM > driven);
+              if (!next) return null;
+              const distToStop = Math.max(0, next.distanceFromStartM - driven);
+              return (
+                <div className="mt-1.5 flex items-center gap-2 bg-orange-600/30 rounded-lg px-2.5 py-1.5 text-[11px] text-orange-200">
+                  <BatteryCharging size={12} className="shrink-0 text-orange-300" />
+                  <span className="font-semibold">Ladestopp in {fmtDist(distToStop)}:</span>
+                  <span className="truncate">{next.name}</span>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -431,11 +547,99 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                   <span className="text-sm font-bold text-blue-700 dark:text-blue-300">{fmtDist(route.distance)}</span>
                   <span className="text-blue-400">·</span>
                   <span className="text-sm text-blue-600 dark:text-blue-400">{fmtTime(route.duration)}</span>
-                  <span className="ml-auto text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-bold">Karte ✓</span>
+                  {chargingPlan && chargingPlan.stops.length > 0 && (
+                    <span className="ml-auto text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                      +{chargingPlan.totalChargingMinutes} min Laden
+                    </span>
+                  )}
+                  {chargingPlan && chargingPlan.stops.length === 0 && (
+                    <span className="ml-auto text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full font-bold">
+                      Reichweite OK ✓
+                    </span>
+                  )}
+                  {!chargingPlan && (
+                    <span className="ml-auto text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-bold">Karte ✓</span>
+                  )}
                 </div>
                 <button type="button" onClick={startNavigation} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm transition-colors">
                   <Play size={14} /> Navigation starten (GPS)
                 </button>
+              </div>
+            )}
+
+            {/* ── Ladeplanung ── */}
+            {route && !isNavActive && (
+              <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 space-y-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <BatteryCharging size={12} className="text-orange-500" />
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Ladeplanung</p>
+                </div>
+                {/* Range slider */}
+                <div className="flex items-center gap-2">
+                  <Zap size={10} className="text-orange-400 shrink-0" />
+                  <span className="text-[11px] text-zinc-500 w-16">Reichweite</span>
+                  <input
+                    type="range" min={80} max={800} step={10}
+                    value={vehicleRangeKm}
+                    onChange={(e) => setVehicleRangeKm(Number(e.target.value))}
+                    className="flex-1 accent-orange-500 h-1.5"
+                  />
+                  <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 w-14 text-right">{vehicleRangeKm} km</span>
+                </div>
+                {/* Battery slider */}
+                <div className="flex items-center gap-2">
+                  <BatteryCharging size={10} className="text-green-400 shrink-0" />
+                  <span className="text-[11px] text-zinc-500 w-16">Akku jetzt</span>
+                  <input
+                    type="range" min={10} max={100} step={5}
+                    value={currentBattery}
+                    onChange={(e) => setCurrentBattery(Number(e.target.value))}
+                    className="flex-1 accent-green-500 h-1.5"
+                  />
+                  <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 w-14 text-right">{currentBattery} %</span>
+                </div>
+                {/* Plan button */}
+                <button
+                  type="button"
+                  onClick={() => void handlePlanStops(route)}
+                  disabled={planningStops}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white transition-colors"
+                >
+                  {planningStops
+                    ? <><Loader2 size={12} className="animate-spin" /> Berechne…</>
+                    : <><Zap size={12} /> Ladestopps planen</>}
+                </button>
+              </div>
+            )}
+
+            {/* ── Ladestopps Ergebnis ── */}
+            {chargingPlan && !isNavActive && (
+              <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 space-y-1.5">
+                {chargingPlan.stops.length === 0 ? (
+                  <p className="text-[11px] text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                    <CheckCircle size={12} /> Kein Ladestopp nötig – Reichweite ausreichend.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-orange-500 flex items-center gap-1">
+                      <BatteryCharging size={10} />
+                      {chargingPlan.stops.length} Ladestopp{chargingPlan.stops.length > 1 ? "s" : ""} · +{chargingPlan.totalChargingMinutes} min
+                    </p>
+                    {chargingPlan.stops.map((stop, i) => (
+                      <div key={i} className="flex items-start gap-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg px-2.5 py-2 text-xs">
+                        <div className="bg-orange-500 rounded-full w-4 h-4 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-white text-[8px] font-black">{i + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-zinc-800 dark:text-zinc-100 truncate">{stop.name}</p>
+                          <p className="text-[10px] text-zinc-400">
+                            nach {fmtDist(stop.distanceFromStartM)} · {stop.powerKw} kW · ca. {stop.estimatedChargingMinutes} min
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
 

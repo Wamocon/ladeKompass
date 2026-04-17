@@ -5,6 +5,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { StationFiltersState } from "./StationFilters";
 import type { OCMStation } from "@/app/api/stations/route";
+import type { PlannedChargingStop } from "@/lib/charging-stops";
 
 export type MapStyle = "light" | "dark" | "satellite" | "standard" | "3d";
 
@@ -67,6 +68,9 @@ const PULSE_CSS = `
   border-right: 6px solid transparent;
   border-bottom: 12px solid white;
   margin-bottom: 2px;
+}
+@keyframes lk-spin {
+  to { transform: rotate(360deg); }
 }
 `;
 
@@ -148,6 +152,8 @@ export interface StationMapGLProps {
   navPosition?: [number, number, number] | null;
   /** Called when user clicks Navigate-to-station in popup */
   onNavigateTo?: (lat: number, lng: number, label: string) => void;
+  /** Planned charging stops along the current route */
+  chargingStops?: PlannedChargingStop[];
 }
 
 const SOURCE_ID           = "stations";
@@ -172,11 +178,13 @@ export function StationMapGL({
   routeGeoJSON,
   navPosition,
   onNavigateTo,
+  chargingStops,
 }: StationMapGLProps) {
   const containerRef  = useRef<HTMLDivElement>(null);
   const mapRef        = useRef<maplibregl.Map | null>(null);
   const markerRef     = useRef<maplibregl.Marker | null>(null); // user location
   const navMarkerRef  = useRef<maplibregl.Marker | null>(null); // nav car
+  const chargingMarkersRef = useRef<maplibregl.Marker[]>([]);   // charging stop pins
   const popupRef      = useRef<maplibregl.Popup | null>(null);  // station popup
   const stationsRef  = useRef<OCMStation[]>([]);
   const abortRef     = useRef<AbortController | null>(null);
@@ -401,7 +409,7 @@ export function StationMapGL({
         .catch(() => {});
     });
 
-    // Click individual station → popup + select
+    // Click individual station → popup + select (async: loads prices)
     map.on("click", POINT_LAYER, (e) => {
       const feature = e.features?.[0];
       if (!feature) return;
@@ -409,83 +417,149 @@ export function StationMapGL({
       const found = stationsRef.current.find((s) => s.ID === stationId) ?? null;
       onStationSelect?.(found);
 
-      if (found) {
-        if (popupRef.current) popupRef.current.remove();
-        const kw = maxKw(found);
-        const col = stationColor(found);
-        const isOp = found.StatusType?.IsOperational;
-        const statusBadge = isOp === true
-          ? `<span style="background:rgba(0,255,136,0.15);color:#00ff88;border:1px solid rgba(0,255,136,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Verfügbar</span>`
-          : isOp === false
-          ? `<span style="background:rgba(255,71,87,0.15);color:#ff4757;border:1px solid rgba(255,71,87,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✗ Außer Betrieb</span>`
-          : `<span style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">? Status unbekannt</span>`;
-        const powerLabel = kw >= 150 ? "HPC Ultra-Schnell" : kw >= 50 ? "DC Schnell" : kw >= 22 ? "DC" : kw > 0 ? "AC Normal" : "";
+      if (!found) return;
+      if (popupRef.current) popupRef.current.remove();
 
-        // Connectors
-        const connRows = (found.Connections ?? []).map(c => {
-          const type = c.ConnectionType?.Title ?? "Unbekannt";
-          const pw = c.PowerKW ? `${c.PowerKW} kW` : "";
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-            <span style="color:rgba(255,255,255,0.7);font-size:11px;">${type}</span>
-            <span style="color:${col};font-weight:700;font-size:11px;">${pw}</span>
-          </div>`;
-        }).join("");
+      const kw = maxKw(found);
+      const col = stationColor(found);
+      const isOp = found.StatusType?.IsOperational;
+      const statusBadge = isOp === true
+        ? `<span style="background:rgba(0,255,136,0.15);color:#00ff88;border:1px solid rgba(0,255,136,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Verfügbar</span>`
+        : isOp === false
+        ? `<span style="background:rgba(255,71,87,0.15);color:#ff4757;border:1px solid rgba(255,71,87,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✗ Außer Betrieb</span>`
+        : `<span style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">? Status unbekannt</span>`;
+      const powerLabel = kw >= 150 ? "HPC Ultra-Schnell" : kw >= 50 ? "DC Schnell" : kw >= 22 ? "DC" : kw > 0 ? "AC Normal" : "";
 
-        // Price info
-        const price = found.UsageCost
-          ? `<div style="margin-top:8px;padding:6px 10px;background:rgba(255,255,255,0.06);border-radius:8px;font-size:11.5px;color:rgba(255,255,255,0.8);">💰 ${found.UsageCost}</div>`
-          : "";
+      // Connector rows grouped by type+power
+      const connRows = (found.Connections ?? []).map(c => {
+        const type = c.ConnectionType?.Title ?? "Unbekannt";
+        const pw = c.PowerKW ? `${c.PowerKW} kW` : "–";
+        const qty = c.Quantity ? ` ×${c.Quantity}` : "";
+        const pwColor = (c.PowerKW ?? 0) >= 150 ? "#c084fc" : (c.PowerKW ?? 0) >= 22 ? "#60a5fa" : "#a3a3a3";
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+          <span style="color:rgba(255,255,255,0.7);font-size:11px;">${type}${qty}</span>
+          <span style="color:${pwColor};font-weight:700;font-size:11.5px;">${pw}</span>
+        </div>`;
+      }).join("");
 
-        // Opening times
-        const hours = found.OpeningTimes?.IsOpen247
-          ? `<div style="font-size:11px;color:#4ade80;margin-top:6px;">🕐 24/7 geöffnet</div>`
-          : "";
+      // Opening / access
+      const hours = found.OpeningTimes?.IsOpen247
+        ? `<div style="font-size:11px;color:#4ade80;margin-top:5px;">🕐 24/7 geöffnet</div>`
+        : "";
+      const access = found.AddressInfo.AccessComments
+        ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;font-style:italic;">${found.AddressInfo.AccessComments}</div>`
+        : "";
 
-        // Access comments
-        const access = found.AddressInfo.AccessComments
-          ? `<div style="font-size:10.5px;color:rgba(255,255,255,0.4);margin-top:5px;font-style:italic;">${found.AddressInfo.AccessComments}</div>`
-          : "";
+      // Unique price container
+      const priceId = `lk-price-${found.ID}`;
+      const chargepriceUrl = `https://www.chargeprice.app/?station=${found.UUID}&source=ocm`;
 
-        const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/'/g,"\\'")}');this.closest('.maplibregl-popup').remove();" style="margin-top:10px;width:100%;padding:7px;background:#2563eb;border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;">&#9654; Navigation starten</button>`;
+      const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/'/g,"\\'")}');this.closest('.maplibregl-popup').remove();" style="margin-top:10px;width:100%;padding:9px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">▶ Navigation starten</button>`;
 
-        const html = `
-          <div style="
-            background:rgba(8,8,18,0.96);
-            backdrop-filter:blur(20px);
-            -webkit-backdrop-filter:blur(20px);
-            border:1px solid rgba(255,255,255,0.13);
-            border-radius:16px;
-            padding:16px;
-            color:#fff;
-            font-family:system-ui,sans-serif;
-            min-width:260px;
-            max-width:300px;
-            box-shadow:0 12px 50px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.05);
-          ">
-            <div style="font-weight:800;font-size:14px;margin-bottom:4px;line-height:1.3;">${found.AddressInfo.Title}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:10px;">${[found.AddressInfo.AddressLine1, found.AddressInfo.Postcode, found.AddressInfo.Town].filter(Boolean).join(", ")}</div>
-            <div style="margin-bottom:10px;">${statusBadge}</div>
-            ${kw > 0 ? `<div style="font-size:15px;font-weight:800;color:${col};margin-bottom:8px;">⚡ ${kw} kW <span style="font-size:11px;font-weight:500;opacity:0.65;">${powerLabel}</span></div>` : ""}
-            ${found.NumberOfPoints ? `<div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:8px;">🔌 ${found.NumberOfPoints} Ladepunkt${(found.NumberOfPoints ?? 0) > 1 ? "e" : ""}</div>` : ""}
-            ${connRows ? `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px;margin-bottom:4px;">${connRows}</div>` : ""}
-            ${price}${hours}${access}
-            ${found.OperatorInfo?.Title ? `<div style="font-size:10.5px;color:rgba(255,255,255,0.35);margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">Betreiber: ${found.OperatorInfo.Title}${found.OperatorInfo.WebsiteURL ? ` · <a href="${found.OperatorInfo.WebsiteURL}" target="_blank" style="color:#60a5fa;">Website</a>` : ""}</div>` : ""}
-            ${navBtn}
-          </div>`;
-        popupRef.current = new maplibregl.Popup({
-          closeButton: false,
-          maxWidth: "none",
-          offset: 14,
+      const html = `<div style="
+        background:rgba(8,8,18,0.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+        border:1px solid rgba(255,255,255,0.13);border-radius:18px;padding:18px;color:#fff;
+        font-family:system-ui,sans-serif;min-width:300px;max-width:340px;
+        box-shadow:0 16px 60px rgba(0,0,0,0.8),0 0 0 1px rgba(255,255,255,0.05);">
+
+        <div style="font-weight:800;font-size:15px;margin-bottom:3px;line-height:1.3;">${found.AddressInfo.Title}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">${[found.AddressInfo.AddressLine1,found.AddressInfo.Postcode,found.AddressInfo.Town].filter(Boolean).join(", ")}</div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          ${statusBadge}
+          ${kw > 0 ? `<span style="font-size:13px;font-weight:800;color:${col};">⚡ ${kw} kW</span><span style="font-size:10px;opacity:0.55;">${powerLabel}</span>` : ""}
+        </div>
+
+        ${found.NumberOfPoints ? `<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:8px;">🔌 ${found.NumberOfPoints} Ladepunkt${(found.NumberOfPoints ?? 0) > 1 ? "e" : ""}</div>` : ""}
+
+        ${connRows ? `<div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;margin-bottom:8px;">${connRows}</div>` : ""}
+
+        <!-- PREISE (async) -->
+        <div id="${priceId}" style="margin-top:2px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);">
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">💰 Preise</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:6px;">
+            <span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.2);border-top-color:#60a5fa;border-radius:50%;animation:lk-spin 0.8s linear infinite;"></span>
+            Preise werden geladen…
+          </div>
+        </div>
+
+        ${hours}${access}
+
+        ${found.OperatorInfo?.Title ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">Betreiber: <span style="color:rgba(255,255,255,0.55);">${found.OperatorInfo.Title}</span>${found.OperatorInfo.WebsiteURL ? ` · <a href="${found.OperatorInfo.WebsiteURL}" target="_blank" rel="noopener" style="color:#60a5fa;">Website</a>` : ""}</div>` : ""}
+
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          ${navBtn}
+          <a href="${chargepriceUrl}" target="_blank" rel="noopener" style="flex:0;white-space:nowrap;display:flex;align-items:center;justify-content:center;padding:9px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#a3e635;font-size:11px;font-weight:700;text-decoration:none;">Alle Tarife →</a>
+        </div>
+      </div>`;
+
+      popupRef.current = new maplibregl.Popup({
+        closeButton: false,
+        maxWidth: "none",
+        offset: 14,
+      })
+        .setLngLat([found.AddressInfo.Longitude, found.AddressInfo.Latitude])
+        .setHTML(html)
+        .addTo(map);
+
+      map.easeTo({
+        center: [found.AddressInfo.Longitude, found.AddressInfo.Latitude],
+        zoom: Math.max(map.getZoom(), 14),
+        duration: 400,
+      });
+
+      // Async: fetch structured price data and update the placeholder
+      const priceParams = new URLSearchParams({
+        stationId: found.UUID ?? String(found.ID),
+        lat: String(found.AddressInfo.Latitude),
+        lng: String(found.AddressInfo.Longitude),
+      });
+      if (found.UsageCost) priceParams.set("usageCost", found.UsageCost);
+      if (found.OperatorInfo?.Title) priceParams.set("operator", found.OperatorInfo.Title);
+
+      fetch(`/api/prices?${priceParams.toString()}`)
+        .then((r) => r.json())
+        .then((data: {
+          lines?: { label: string; amount: number; unit: string }[];
+          isFree?: boolean;
+          rawText?: string;
+          note?: string;
+          source?: string;
+          chargepriceUrl?: string;
+          operatorUrl?: string;
+        }) => {
+          const el = document.getElementById(priceId);
+          if (!el) return;
+          let inner = `<div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">💰 Preise</div>`;
+
+          if (data.isFree) {
+            inner += `<div style="font-size:14px;font-weight:800;color:#4ade80;">Kostenlos ✓</div>`;
+          } else if (data.lines && data.lines.length > 0) {
+            inner += data.lines.map(l =>
+              `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;">
+                <span style="font-size:11px;color:rgba(255,255,255,0.55);">${l.label}</span>
+                <span style="font-size:15px;font-weight:900;color:#fbbf24;">${l.amount.toFixed(2)} <span style="font-size:10px;font-weight:500;opacity:0.7;">${l.unit}</span></span>
+              </div>`
+            ).join("");
+            if (data.note) {
+              inner += `<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:5px;border-top:1px solid rgba(255,255,255,0.06);padding-top:5px;">${data.note}</div>`;
+            }
+            const srcLabel = data.source === "chargeprice" ? "Chargeprice.app" : data.source === "ocm_parsed" ? "Betreiber (OCM)" : "Schätzung";
+            inner += `<div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px;">Quelle: ${srcLabel}</div>`;
+          } else if (data.rawText) {
+            inner += `<div style="font-size:11px;color:rgba(255,255,255,0.65);line-height:1.5;">${data.rawText}</div>`;
+          } else {
+            inner += `<div style="font-size:11px;color:rgba(255,255,255,0.3);">Keine Preisdaten verfügbar.</div>`;
+            if (data.operatorUrl) {
+              inner += `<a href="${data.operatorUrl}" target="_blank" rel="noopener" style="font-size:11px;color:#60a5fa;display:block;margin-top:4px;">Preise beim Betreiber →</a>`;
+            }
+          }
+          el.innerHTML = inner;
         })
-          .setLngLat([found.AddressInfo.Longitude, found.AddressInfo.Latitude])
-          .setHTML(html)
-          .addTo(map);
-        map.easeTo({
-          center: [found.AddressInfo.Longitude, found.AddressInfo.Latitude],
-          zoom: Math.max(map.getZoom(), 14),
-          duration: 400,
+        .catch(() => {
+          const el = document.getElementById(priceId);
+          if (el) el.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,0.3);">Preise nicht verfügbar.</div>`;
         });
-      }
     });
 
     // Pointer cursor on hover
@@ -689,6 +763,38 @@ export function StationMapGL({
     // Auto-follow: keep nav position centered
     map.easeTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15), duration: 500, bearing });
   }, [navPosition]);
+
+  // --- Charging stop markers -----------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Remove old markers
+    chargingMarkersRef.current.forEach((m) => m.remove());
+    chargingMarkersRef.current = [];
+
+    if (!chargingStops || chargingStops.length === 0) return;
+
+    chargingStops.forEach((stop, i) => {
+      const el = document.createElement("div");
+      el.style.cssText = [
+        "width:30px;height:30px;border-radius:50%",
+        "background:#f97316;border:3px solid #fff",
+        "box-shadow:0 0 0 3px rgba(249,115,22,0.4),0 2px 8px rgba(0,0,0,0.35)",
+        "display:flex;align-items:center;justify-content:center",
+        "cursor:pointer;font-weight:900;font-size:12px;color:#fff",
+        "font-family:system-ui,sans-serif",
+      ].join(";");
+      el.textContent = String(i + 1);
+      el.title = `${stop.name} · ${stop.powerKw} kW · ~${stop.estimatedChargingMinutes} min`;
+
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([stop.lng, stop.lat])
+        .addTo(map);
+
+      chargingMarkersRef.current.push(marker);
+    });
+  }, [chargingStops]);
 
   // --- Register global nav callback for popup button ----------------------
   useEffect(() => {

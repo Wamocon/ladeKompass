@@ -10,6 +10,7 @@ import { NavigationWizard } from "./NavigationWizard";
 import type { NavRoutePreset } from "./NavigationWizard";
 import type { StationFiltersState } from "./StationFilters";
 import type { OCMStation } from "@/app/api/stations/route";
+import type { PlannedChargingStop } from "@/lib/charging-stops";
 import {
   Zap, MapPin, ChevronRight, Wifi, WifiOff, HelpCircle,
   Navigation as NavIcon, Layers, Target, BarChart2, ChevronDown, ChevronUp,
@@ -132,6 +133,7 @@ export default function StationMapWrapper() {
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(null);
   const [navPosition, setNavPosition] = useState<[number, number, number] | null>(null);
+  const [chargingStops, setChargingStops] = useState<PlannedChargingStop[]>([]);
 
   useEffect(() => {
     if (navigator?.geolocation) {
@@ -629,10 +631,11 @@ export default function StationMapWrapper() {
       {/* Navigation Wizard - right floating panel */}
       <NavigationWizard
         onRoute={(geoJSON) => setRouteGeoJSON(geoJSON)}
-        onClear={() => { setRouteGeoJSON(null); setNavPosition(null); }}
+        onClear={() => { setRouteGeoJSON(null); setNavPosition(null); setChargingStops([]); }}
         preset={navPreset}
         onPositionUpdate={(pos) => setNavPosition(pos)}
         onNavStop={() => setNavPosition(null)}
+        onChargingStops={(stops) => setChargingStops(stops)}
       />
 
       <StationMapGL
@@ -648,13 +651,27 @@ export default function StationMapWrapper() {
         selectedStation={selectedStation}
         routeGeoJSON={routeGeoJSON}
         navPosition={navPosition}
+        chargingStops={chargingStops}
         onNavigateTo={(lat, lng, label) => {
-          setNavPreset({
-            fromLabel: "Aktueller Standort",
-            toLabel: label,
-            fromCoord: userLocation ?? [51.1657, 10.4515],
-            toCoord: [lat, lng],
-          });
+          // Always get fresh GPS position for most accurate start point
+          const buildPreset = (fromLat: number, fromLng: number) => {
+            setNavPreset({
+              fromLabel: "Aktueller Standort",
+              toLabel: label,
+              fromCoord: [fromLat, fromLng],
+              toCoord: [lat, lng],
+            });
+            setFlyToCenter([fromLat, fromLng]);
+          };
+          if (navigator?.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => buildPreset(pos.coords.latitude, pos.coords.longitude),
+              ()    => buildPreset(...(userLocation ?? [51.1657, 10.4515])),
+              { timeout: 5000, enableHighAccuracy: true },
+            );
+          } else {
+            buildPreset(...(userLocation ?? [51.1657, 10.4515]));
+          }
         }}
       />
     </div>
