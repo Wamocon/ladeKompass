@@ -97,7 +97,7 @@ export function NewsfeedBanner({ stations, userLocation, isNavActive }: Newsfeed
   if (dismissed || !userLocation || nearby.length === 0 || isNavActive) return null;
 
   return (
-    <div className="absolute bottom-20 left-3 right-3 z-[595] pointer-events-none">
+    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[595] pointer-events-none w-full max-w-[55vw] min-w-[380px] px-3">
       <div className="pointer-events-auto">
         {/* Header bar */}
         <div className="flex items-center gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-t-2xl px-3 py-2 shadow-xl">
@@ -127,11 +127,11 @@ export function NewsfeedBanner({ stations, userLocation, isNavActive }: Newsfeed
         {/* Scrollable cards */}
         {!collapsed && (
           <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-t-0 border-zinc-200 dark:border-zinc-700 rounded-b-2xl shadow-xl overflow-x-auto">
-            <div className="flex gap-2 px-3 py-2.5" style={{ width: "max-content" }}>
+            <div className="flex gap-2.5 px-3 py-3.5" style={{ width: "max-content" }}>
               {nearby.map(({ station, distKm, price, maxKw }) => (
                 <div
                   key={station.ID}
-                  className="flex flex-col gap-1.5 w-44 shrink-0 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3 py-2.5 border border-zinc-100 dark:border-zinc-700 hover:border-green-400 dark:hover:border-green-600 transition-colors cursor-pointer"
+                  className="flex flex-col gap-2 w-48 shrink-0 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3 py-3 border border-zinc-100 dark:border-zinc-700 hover:border-green-400 dark:hover:border-green-600 transition-colors cursor-pointer"
                 >
                   {/* Station name + EV icon */}
                   <div className="flex items-start gap-1.5">
