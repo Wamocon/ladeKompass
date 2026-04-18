@@ -16,7 +16,6 @@ name: "Docs: Publish to GitHub Pages"
 
 on:
   push:
-    branches: [main]
     paths:
       - "docs/**"
       - ".github/workflows/docs-pages.yml"
