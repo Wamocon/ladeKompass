@@ -1,6 +1,6 @@
 # Produkthandbuch: LadeKompass – Alle Ladesäulen, ein Überblick
 
-> **Version 1.0** | Stand: April 2026 | WAMOCON
+> **Version 1.1** | Stand: April 2026 | WAMOCON
 
 ---
 
@@ -102,6 +102,8 @@ LadeKompass ist in drei Tarifen verfügbar.
 2. Im Detailpanel auf **Tarife anzeigen** klicken
 3. Alle bekannten Tarife mit kWh-Preis, Minutenpreis und Einmalgebühr werden angezeigt
 4. Kostenrechner: Akkukapazität und Ladestand eingeben → Ladekosten werden berechnet
+5. Falls keine strukturierten Tarife vorliegen: OCM-Preisbeschreibung des Betreibers wird als Text angezeigt
+6. Falls keine Preisdaten vorhanden: direkter Link zur Betreiber-Webseite oder GoingElectric als Fallback
 
 ### 3.4 Community-Meldung abgeben (Lite/Pro)
 
@@ -225,6 +227,7 @@ Gesperrte Features zeigen eine `PlanGate`-Komponente mit Upgrade-CTA:
 | Feature | Beschreibung |
 | :--- | :--- |
 | Ladesäulen-Cluster | Gruppierung naher Stationen bei niedrigem Zoom |
+| EV-Pin-Icons | 5 farbige SVG-Teardrop-Pins nach Ladeleistung und Status |
 | Echtzeit-Status | Grün/Rot/Grau-Marker je nach Betriebsstatus |
 | Heatmap | Dichtekarte aller Ladestationen |
 | 3D-Gebäude | Optionale 3D-Ansicht (MapLibre) |
@@ -232,6 +235,18 @@ Gesperrte Features zeigen eine `PlanGate`-Komponente mit Upgrade-CTA:
 | Route-Layer | Berechnete Route als blaue Linie |
 | Lade-Stopps | Orange Marker auf der Route |
 | Kartenstile | Hell, Dunkel, Farbig, Standard |
+
+#### 5.4.1 EV-Pin-Typen
+
+Jede Ladesäule wird als farbiger Teardrop-Pin dargestellt – abhängig von der maximalen Ladeleistung und dem Betriebsstatus:
+
+| Typ | Farbe | Kriterium |
+| :--- | :--- | :--- |
+| **HPC** (Ultraschnell) | Dunkelgrün `#15803d` | ≥ 150 kW |
+| **DC** (Schnell) | Grün `#16a34a` | ≥ 50 kW |
+| **AC** (Normal) | Hellgrün `#22c55e` | < 50 kW |
+| **Offline** | Rot `#dc2626` | Station außer Betrieb |
+| **Unbekannt** | Grau `#64748b` | Keine Leistungsangabe |
 
 ### 5.5 NavigationWizard
 
@@ -323,10 +338,11 @@ Auf der Karte öffnet ein FAB-Button (unten links, Schieberegler-Icon) ein **Bot
 
 ### 7.2 Middleware-Checks
 
-1. **Auth-Check:** Nicht eingeloggt → `/auth/login` (nur für geschützte Routen)
-2. **Plan-Check:** Free auf gesperrtem Feature → `PlanGate`-Komponente mit Upgrade-CTA
-3. **Locale-Redirect:** `/` → `/de/map`
-4. **Admin-Guard:** Nicht-Admin auf `/admin/*` → `/dashboard`
+1. **API-Guard:** `/api/*` werden direkt durchgeleitet – kein Locale-Redirect (verhindert 404 auf API-Routen)
+2. **Auth-Check:** Nicht eingeloggt → `/auth/login` (nur für geschützte Routen)
+3. **Plan-Check:** Free auf gesperrtem Feature → `PlanGate`-Komponente mit Upgrade-CTA
+4. **Locale-Redirect:** `/` → `/de/map`
+5. **Admin-Guard:** Nicht-Admin auf `/admin/*` → `/dashboard`
 
 ### 7.3 API-Routen
 
@@ -400,6 +416,8 @@ Bei Registrierung und Einladungs-Annahme Pflicht-Zustimmung zu:
 | OSRM | Open Source Routing Machine – Open-Source-Routenberechnung |
 | Nominatim | OpenStreetMap-basierter Geocoding-Service |
 | MapLibre GL | Open-Source-Karten-Rendering auf WebGL-Basis |
+| EV-Pin | Farbiger Teardrop-Marker auf der Karte je Ladesäulentyp (HPC/DC/AC/Offline) |
+| NearbyFeed | Dashboard-Komponente die günstige Stationen in der Nähe des Nutzers anzeigt |
 | PlanGate | UI-Komponente, die Features basierend auf dem Tarif sperrt |
 | BottomNav | Fixierter Tab-Balken am unteren Bildschirmrand (mobile) |
 | MobileSheet | Bottom Sheet – Panel, das von unten einschiebt (mobile) |
@@ -410,5 +428,5 @@ Bei Registrierung und Einladungs-Annahme Pflicht-Zustimmung zu:
 
 ---
 
-*LadeKompass Produkthandbuch – Version 1.0 – April 2026*  
+*LadeKompass Produkthandbuch – Version 1.1 – April 2026*  
 *© WAMOCON, Deutschland. Alle Rechte vorbehalten.*

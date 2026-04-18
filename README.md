@@ -27,7 +27,9 @@ LadeKompass ist eine webbasierte SaaS-Anwendung für Elektrofahrzeugfahrer. Die 
 - 🔍 **Intelligente Suche & Filter** – nach Ladeleistung, Steckertyp, Status
 - 🛣️ **Routenplanung mit Lade-Stopps** – OSRM-Routing, automatische Ladeplanung
 - 🧭 **Turn-by-Turn Navigation** – GPS-gestützt, Spuranzeige, HUD
-- 📊 **Tarif-Vergleich** – kWh-Preise, Minutenpreis, Blockiergebühren
+- 📊 **Tarif-Vergleich** – kWh-Preise, Minutenpreis, Blockiergebühren; Fallback auf OCM-Preistext → Betreiber-Link → GoingElectric
+- 🔵 **EV-Pin-Icons** – 5 Typen (HPC/DC/AC/Offline/Unbekannt) als farbige SVG-Teardrop-Marker auf der Karte
+- 📍 **NearbyFeed** – Günstigste Stationen in der Nähe im Dashboard (Pro)
 - 📱 **Mobile First** – Bottom Tab Navigation, Bottom Sheets, Safe Area Support
 - 🌙 **Dark Mode** – vollständig unterstützt
 - 🌐 **Mehrsprachig** – Deutsch + Englisch (next-intl)
@@ -85,6 +87,7 @@ NEXT_PUBLIC_SUPABASE_URL=         # Supabase-Projekt-URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY=    # Supabase Anon Key
 SUPABASE_SERVICE_ROLE_KEY=        # Service Role Key (server-only)
 SUPABASE_DB_SCHEMA=               # Datenbankschema (z.B. ladekompass-dev)
+OCM_API_KEY=                      # OpenChargeMap API Key (server-only)
 ```
 
 ---
@@ -111,6 +114,7 @@ src/
 │   ├── route-calc.ts       # Routen- und Entfernungsberechnungen
 │   ├── tariff-calculator.ts # Ladekosten-Berechnung
 │   ├── plan-limits.ts      # Freemium-Plan-Logik
+│   ├── map-icons.ts        # EV-Pin-Icons (5 Typen, SVG, Farben)
 │   └── legal/              # DSGVO-Consent-Logik
 └── i18n/                   # Internationalisierung (next-intl)
 
@@ -136,6 +140,7 @@ npm run test:coverage       # Mit Coverage-Report
 - `src/lib/tariff-calculator.ts`
 - `src/lib/plan-limits.ts`
 - `src/lib/legal/consent.ts`
+- `src/lib/map-icons.ts` (36 Tests – Pin-Typen, SVG-Generierung, Leistungslogik)
 
 ---
 
@@ -152,9 +157,11 @@ npm run test:coverage       # Mit Coverage-Report
 
 Die App wird automatisch über GitHub Actions auf Vercel deployed:
 
-1. Push auf `main` → GitHub Actions CI/CD
+1. Push auf beliebigen Branch → GitHub Actions CI/CD (Preview-Deploy)
 2. `npm run typecheck` → `npm run lint` → `npm run build`
 3. Deploy auf Vercel (serverless + Edge)
+4. Branch-Alias: `test`-Branch → `test.ladekompass.com` (via `vercel alias set`)
+5. `release: published` auf GitHub → Produktions-Deploy auf `ladekompass.de`
 
 ---
 
