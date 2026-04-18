@@ -5,6 +5,7 @@ import { routing } from "@/i18n/routing";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CookieBanner } from "@/components/layout/CookieBanner";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 
@@ -98,9 +99,10 @@ export default async function LocaleLayout({
           userName={userName}
           isAuthenticated={isAuthenticated}
         />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 pb-mobile-nav">{children}</main>
         <Footer />
         <CookieBanner />
+        <BottomNav isAuthenticated={isAuthenticated} />
       </div>
     </NextIntlClientProvider>
   );
