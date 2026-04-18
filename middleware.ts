@@ -9,6 +9,12 @@ const PROTECTED_PATHS = ["/dashboard", "/profile", "/settings", "/admin"];
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Never process API routes — let Next.js handle them directly.
+  // Without this guard, next-intl would redirect /api/stations → /de/api/stations (404).
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
   // Strip locale prefix to check protected paths
   const pathnameWithoutLocale = pathname.replace(/^\/(de|en)/, "");
 
@@ -45,7 +51,8 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all paths except Next.js internals and static files
-    "/((?!_next|_vercel|.*\\..*).*)",
+    // Match all paths except Next.js internals, static files, and API routes.
+    // API routes must be excluded so next-intl doesn't redirect them to /de/api/...
+    "/((?!_next|_vercel|api/|.*\\..*).*)",
   ],
 };
