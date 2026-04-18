@@ -119,3 +119,30 @@ select {
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
+/* ─── Mobile layout helpers ──────────────────────────────────── */
+
+/**
+ * Bottom-safe padding for content above the BottomNav on mobile.
+ * On desktop (md+) this has no effect.
+ */
+.pb-mobile-nav {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .pb-mobile-nav {
+    padding-bottom: 0;
+  }
+}
+
+/* Prevent content from being hidden behind the mobile bottom nav */
+.min-h-mobile-nav {
+  min-height: calc(100svh - 56px - 56px - env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .min-h-mobile-nav {
+    min-height: calc(100svh - 56px);
+  }
+}
+

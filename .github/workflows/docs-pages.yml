@@ -1,0 +1,368 @@
+# =============================================================================
+# Produkthandbuch → GitHub Pages
+# =============================================================================
+# Veröffentlicht docs/Produkthandbuch-LadeKompass.md als statische HTML-Seite
+# auf GitHub Pages (https://wamocon.github.io/ladeKompass/).
+#
+# Trigger:
+#   - Push auf main, wenn docs/** oder .github/workflows/docs-pages.yml geändert
+#   - Manuell über Actions → "Docs: Publish to GitHub Pages" → Run workflow
+#
+# Voraussetzung im Repository:
+#   GitHub → Settings → Pages → Source: "GitHub Actions"
+# =============================================================================
+
+name: "Docs: Publish to GitHub Pages"
+
+on:
+  push:
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Nur einen gleichzeitigen Deployment-Job zulassen, laufende nicht abbrechen
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build HTML from Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install markdown-to-html converter
+        run: |
+          mkdir -p /tmp/md-build
+          cd /tmp/md-build
+          printf '{"type":"module"}\n' > package.json
+          npm install marked --silent
+
+      - name: Create output directory
+        run: mkdir -p _site
+
+      - name: Convert Produkthandbuch Markdown → HTML
+        run: |
+          cat > /tmp/md-build/convert.mjs << 'EOF'
+          import { marked } from "marked";
+          import { readFileSync, writeFileSync } from "fs";
+
+          const ws = process.env.GITHUB_WORKSPACE;
+          const md = readFileSync(`${ws}/docs/Produkthandbuch-LadeKompass.md`, "utf-8");
+          const body = marked.parse(md);
+
+          const html = `<!DOCTYPE html>
+          <html lang="de">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Produkthandbuch – LadeKompass</title>
+            <style>
+              :root {
+                --bg: #0f172a;
+                --surface: #1e293b;
+                --border: rgba(255,255,255,0.08);
+                --text: #e2e8f0;
+                --muted: #94a3b8;
+                --primary: #3b82f6;
+                --primary-glow: rgba(59,130,246,0.15);
+                --green: #22c55e;
+                --radius: 12px;
+                font-family: "Inter", system-ui, -apple-system, sans-serif;
+              }
+              *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+              body {
+                background: var(--bg);
+                color: var(--text);
+                line-height: 1.7;
+                padding: 0;
+              }
+              /* Top bar */
+              header {
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                background: rgba(15,23,42,0.92);
+                backdrop-filter: blur(12px);
+                border-bottom: 1px solid var(--border);
+                padding: 14px 24px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+              }
+              header .logo {
+                font-size: 20px;
+                font-weight: 800;
+                color: var(--primary);
+                text-decoration: none;
+                letter-spacing: -0.5px;
+              }
+              header .badge {
+                font-size: 11px;
+                background: var(--primary-glow);
+                border: 1px solid var(--primary);
+                color: var(--primary);
+                border-radius: 20px;
+                padding: 2px 10px;
+              }
+              header .spacer { flex: 1; }
+              header .app-link {
+                font-size: 13px;
+                color: var(--muted);
+                text-decoration: none;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 5px 12px;
+                transition: color .2s, border-color .2s;
+              }
+              header .app-link:hover { color: var(--text); border-color: var(--primary); }
+
+              /* Layout */
+              .layout { display: flex; min-height: 100vh; }
+
+              /* Sidebar TOC */
+              nav#toc {
+                width: 260px;
+                flex-shrink: 0;
+                position: sticky;
+                top: 53px;
+                height: calc(100vh - 53px);
+                overflow-y: auto;
+                padding: 24px 16px;
+                border-right: 1px solid var(--border);
+              }
+              nav#toc h2 {
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+                color: var(--muted);
+                margin-bottom: 12px;
+              }
+              nav#toc a {
+                display: block;
+                font-size: 13px;
+                color: var(--muted);
+                text-decoration: none;
+                padding: 5px 8px;
+                border-radius: 6px;
+                transition: background .15s, color .15s;
+              }
+              nav#toc a:hover, nav#toc a.active {
+                background: var(--primary-glow);
+                color: var(--text);
+              }
+              nav#toc a.active { color: var(--primary); font-weight: 600; }
+
+              /* Main content */
+              main {
+                flex: 1;
+                max-width: 860px;
+                padding: 40px 48px 80px;
+                min-width: 0;
+              }
+              @media (max-width: 768px) {
+                nav#toc { display: none; }
+                main { padding: 24px 20px 60px; }
+              }
+
+              /* Typography */
+              main h1 {
+                font-size: 2rem;
+                font-weight: 800;
+                letter-spacing: -0.5px;
+                margin-bottom: 8px;
+                color: #f1f5f9;
+              }
+              main h2 {
+                font-size: 1.35rem;
+                font-weight: 700;
+                margin-top: 48px;
+                margin-bottom: 16px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid var(--border);
+                color: #f1f5f9;
+                scroll-margin-top: 70px;
+              }
+              main h3 {
+                font-size: 1.1rem;
+                font-weight: 600;
+                margin-top: 28px;
+                margin-bottom: 10px;
+                color: var(--primary);
+                scroll-margin-top: 70px;
+              }
+              main h4 {
+                font-size: 0.95rem;
+                font-weight: 600;
+                margin-top: 20px;
+                margin-bottom: 8px;
+                color: var(--text);
+              }
+              main p { margin-bottom: 14px; color: var(--text); }
+              main a { color: var(--primary); text-decoration: none; }
+              main a:hover { text-decoration: underline; }
+              main ul, main ol { padding-left: 24px; margin-bottom: 14px; }
+              main li { margin-bottom: 5px; }
+              main blockquote {
+                border-left: 3px solid var(--primary);
+                background: var(--primary-glow);
+                border-radius: 0 var(--radius) var(--radius) 0;
+                padding: 12px 18px;
+                margin: 16px 0;
+                font-style: italic;
+                color: var(--muted);
+              }
+              main code {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                padding: 1px 6px;
+                font-size: 0.87em;
+                font-family: "JetBrains Mono", "Fira Code", monospace;
+                color: #86efac;
+              }
+              main pre {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 20px;
+                overflow-x: auto;
+                margin: 16px 0;
+              }
+              main pre code {
+                background: none;
+                border: none;
+                padding: 0;
+                font-size: 0.88em;
+              }
+              main table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 18px 0;
+                font-size: 0.9rem;
+              }
+              main th {
+                background: var(--surface);
+                padding: 10px 14px;
+                text-align: left;
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: var(--muted);
+                border-bottom: 1px solid var(--border);
+              }
+              main td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border);
+                vertical-align: top;
+              }
+              main tr:last-child td { border-bottom: none; }
+              main hr {
+                border: none;
+                border-top: 1px solid var(--border);
+                margin: 36px 0;
+              }
+
+              /* Footer */
+              footer {
+                text-align: center;
+                padding: 32px 24px;
+                border-top: 1px solid var(--border);
+                color: var(--muted);
+                font-size: 12px;
+              }
+              footer a { color: var(--muted); text-decoration: none; }
+              footer a:hover { color: var(--text); }
+            </style>
+          </head>
+          <body>
+            <header>
+              <a class="logo" href="#">⚡ LadeKompass</a>
+              <span class="badge">Handbuch</span>
+              <span class="spacer"></span>
+              <a class="app-link" href="https://ladekompass.vercel.app" target="_blank" rel="noopener">
+                → App öffnen
+              </a>
+            </header>
+
+            <div class="layout">
+              <nav id="toc">
+                <h2>Inhalt</h2>
+                <a href="#produkthandbuch-ladekompass--alle-ladesäulen-ein-überblick">Übersicht</a>
+                <a href="#1-übersicht">1. Übersicht</a>
+                <a href="#2-business-model-free-lite-und-pro">2. Business Model</a>
+                <a href="#3-tutorials--erste-schritte">3. Tutorials</a>
+                <a href="#4-how-to-guides">4. How-to Guides</a>
+                <a href="#5-funktionsreferenz">5. Funktionsreferenz</a>
+                <a href="#6-mobile-nutzung">6. Mobile Nutzung</a>
+                <a href="#7-technische-architektur">7. Technische Architektur</a>
+                <a href="#8-compliance-und-dsgvo">8. Compliance & DSGVO</a>
+                <a href="#9-glossar">9. Glossar</a>
+              </nav>
+
+              <main id="content">
+                ${body}
+              </main>
+            </div>
+
+            <footer>
+              © 2026 WAMOCON &nbsp;·&nbsp;
+              <a href="https://ladekompass.vercel.app/de/legal/impressum">Impressum</a> &nbsp;·&nbsp;
+              <a href="https://ladekompass.vercel.app/de/legal/datenschutz">Datenschutz</a>
+            </footer>
+
+            <script>
+              // Highlight active TOC entry on scroll
+              const headings = document.querySelectorAll("main h2, main h3");
+              const links = document.querySelectorAll("nav#toc a");
+              const obs = new IntersectionObserver((entries) => {
+                entries.forEach((e) => {
+                  if (e.isIntersecting) {
+                    links.forEach((l) => l.classList.remove("active"));
+                    const active = document.querySelector(
+                      "nav#toc a[href='#" + e.target.id + "']"
+                    );
+                    if (active) active.classList.add("active");
+                  }
+                });
+              }, { rootMargin: "-60px 0px -80% 0px" });
+              headings.forEach((h) => obs.observe(h));
+            </script>
+          </body>
+          </html>`;
+
+          writeFileSync(`${ws}/_site/index.html`, html, "utf-8");
+          console.log("✓ _site/index.html generated");
+          EOF
+          cd /tmp/md-build && node convert.mjs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "_site"
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

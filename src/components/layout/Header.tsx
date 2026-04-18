@@ -20,8 +20,6 @@ import {
   Monitor,
   ChevronDown,
   Zap,
-  Menu,
-  X,
   Car,
 } from "lucide-react";
 import type { UserPlan, UserRole } from "@/lib/legal/consent";
@@ -50,16 +48,13 @@ export function Header({
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { startTransition(() => setMounted(true)); }, []);
 
-  const isAdmin =
-    userRole === "admin" || userRole === "super_admin";
+  const isAdmin = userRole === "admin" || userRole === "super_admin";
 
   function switchLocale(newLocale: string) {
-    // Replace /de/ or /en/ with the new locale
     const newPath = pathname.replace(/^\/(de|en)/, `/${newLocale}`);
     router.push(newPath);
   }
@@ -88,6 +83,7 @@ export function Header({
   return (
     <header className="sticky top-0 z-50 bg-[var(--bg-page)]/90 backdrop-blur-md border-b border-[var(--border)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+
         {/* Logo */}
         <Link
           href={`/${locale}/map`}
@@ -105,8 +101,8 @@ export function Header({
           </span>
         </Link>
 
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-1">
+        {/* Desktop Nav – hidden on mobile (BottomNav handles it) */}
+        <nav className="hidden md:flex items-center gap-1" aria-label="Hauptnavigation Desktop">
           {navLinks.map((link) => {
             const isActive = pathname.startsWith(link.href);
             return (
@@ -118,6 +114,7 @@ export function Header({
                     ? "bg-[var(--primary-light)] text-[var(--primary)]"
                     : "text-[var(--text-muted)] hover:text-[var(--text-base)] hover:bg-[var(--bg-elevated)]"
                 }`}
+                aria-current={isActive ? "page" : undefined}
               >
                 <link.icon size={15} />
                 {link.label}
@@ -127,8 +124,9 @@ export function Header({
         </nav>
 
         {/* Right side controls */}
-        <div className="flex items-center gap-2">
-          {/* Plan badge */}
+        <div className="flex items-center gap-1 sm:gap-2">
+
+          {/* Plan badge – desktop only */}
           {isAuthenticated && userPlan && (
             <Link
               href={`/${locale}/upgrade`}
@@ -143,6 +141,7 @@ export function Header({
           <button
             onClick={cycleTheme}
             className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-base)] hover:bg-[var(--bg-elevated)] transition-colors"
+            aria-label="Theme wechseln"
             title="Theme wechseln"
           >
             {themeIcon}
@@ -150,7 +149,10 @@ export function Header({
 
           {/* Language switcher */}
           <div className="relative group">
-            <button className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-base)] hover:bg-[var(--bg-elevated)] transition-colors uppercase">
+            <button
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-base)] hover:bg-[var(--bg-elevated)] transition-colors uppercase"
+              aria-label={`Sprache: ${locale}`}
+            >
               {locale}
               <ChevronDown size={12} />
             </button>
@@ -171,7 +173,7 @@ export function Header({
             </div>
           </div>
 
-          {/* Auth links */}
+          {/* Desktop auth controls */}
           {isAuthenticated ? (
             <div className="hidden md:flex items-center gap-1">
               {isAdmin && (
@@ -208,71 +210,28 @@ export function Header({
               </form>
             </div>
           ) : (
-            <Link
-              href={`/${locale}/auth/login`}
-              className="hidden md:flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[var(--primary)] text-white text-sm font-semibold hover:bg-[var(--primary-hover)] transition-colors"
-            >
-              <LogIn size={14} />
-              {t("nav.login")}
-            </Link>
-          )}
-
-          {/* Mobile menu toggle */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors"
-          >
-            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="md:hidden border-t border-[var(--border)] bg-[var(--bg-surface)] px-4 py-3 flex flex-col gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-base)] hover:bg-[var(--bg-elevated)] transition-colors"
-            >
-              <link.icon size={16} />
-              {link.label}
-            </Link>
-          ))}
-          {!isAuthenticated && (
-            <Link
-              href={`/${locale}/auth/login`}
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-[var(--primary)] hover:bg-[var(--primary-light)] transition-colors"
-            >
-              <LogIn size={16} />
-              {t("nav.login")}
-            </Link>
-          )}
-          {isAuthenticated && (
             <>
+              {/* Mobile: compact login icon (no text) */}
               <Link
-                href={`/${locale}/profile`}
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors"
+                href={`/${locale}/auth/login`}
+                className="md:hidden p-2 rounded-lg text-[var(--primary)] hover:bg-[var(--primary-light)] transition-colors"
+                aria-label={t("nav.login")}
+                title={t("nav.login")}
               >
-                <User size={16} />
-                {t("nav.profile")}
+                <LogIn size={18} />
               </Link>
+              {/* Desktop: full login button */}
               <Link
-                href={`/${locale}/settings`}
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors"
+                href={`/${locale}/auth/login`}
+                className="hidden md:flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[var(--primary)] text-white text-sm font-semibold hover:bg-[var(--primary-hover)] transition-colors"
               >
-                <Settings size={16} />
-                {t("nav.settings")}
+                <LogIn size={14} />
+                {t("nav.login")}
               </Link>
             </>
           )}
         </div>
-      )}
+      </div>
     </header>
   );
 }

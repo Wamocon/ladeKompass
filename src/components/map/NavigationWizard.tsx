@@ -534,7 +534,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
 
   if (panelState === "hidden") {
     return (
-      <div className="absolute bottom-24 right-4 z-[700]">
+      <div className="absolute bottom-28 md:bottom-24 right-4 z-[700]">
         <button type="button" onClick={() => setPanelState("expanded")} className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3.5 shadow-xl transition-colors" title="Navigation öffnen">
           <Navigation size={20} />
         </button>
@@ -543,7 +543,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   }
 
   return (
-    <div className="absolute top-3 right-3 z-[700] w-80 flex flex-col">
+    <div className="absolute top-3 right-3 z-[700] w-[calc(100vw-1.5rem)] md:w-80 max-w-sm flex flex-col">
       <div className="flex flex-col bg-white/97 dark:bg-zinc-900/97 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-2xl overflow-hidden">
 
         {/* Header */}

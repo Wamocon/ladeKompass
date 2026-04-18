@@ -13,10 +13,11 @@ import type { OCMStation } from "@/app/api/stations/route";
 import type { PlannedChargingStop } from "@/lib/charging-stops";
 import { NewsfeedBanner } from "./NewsfeedBanner";
 import { EvStationIcon } from "./EvStationIcon";
+import { MobileSheet } from "@/components/ui/MobileSheet";
 import {
   Zap, ChevronRight, Wifi, WifiOff, HelpCircle,
   Navigation as NavIcon, Layers, Target, BarChart2, ChevronDown, ChevronUp,
-  Download, Thermometer, Box, Clock, X,
+  Download, Thermometer, Box, Clock, X, SlidersHorizontal,
 } from "lucide-react";
 
 // â”€â”€â”€ Station feed helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -285,6 +286,7 @@ export default function StationMapWrapper() {
   const totalPower = stats.hpc + stats.dc + stats.ac || 1;
 
   const [showPanel, setShowPanel] = useState(true);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   const POWER_CHIPS = [
     { label: "AC \u226422kW", value: "ac" as const },
@@ -306,15 +308,15 @@ export default function StationMapWrapper() {
         <button
           type="button"
           onClick={() => setShowPanel(true)}
-          className="absolute top-3 left-3 z-[650] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full p-2.5 shadow-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+          className="hidden md:block absolute top-3 left-3 z-[650] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full p-2.5 shadow-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
           title="Panel einblenden"
         >
           <Layers size={18} className="text-zinc-600 dark:text-zinc-300" />
         </button>
       )}
 
-      {/* LEFT PANEL (full height) */}
-      <div className={`absolute top-0 left-0 bottom-0 z-[600] w-72 flex flex-col pointer-events-none transition-transform duration-300 ${showPanel ? "translate-x-0" : "-translate-x-full"}`}>
+      {/* LEFT PANEL (full height) — desktop only */}
+      <div className={`hidden md:flex absolute top-0 left-0 bottom-0 z-[600] w-72 flex-col pointer-events-none transition-transform duration-300 ${showPanel ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Scrollable panel container */}
         <div className="pointer-events-auto flex flex-col gap-0 m-3 mr-0 overflow-y-auto rounded-2xl bg-white/97 dark:bg-zinc-900/97 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 shadow-xl max-h-full">
 
@@ -621,9 +623,136 @@ export default function StationMapWrapper() {
         </div>
       </div>
 
+      {/* ═══ Mobile FAB – Filter & Stationen (mobile only) ════════════════ */}
+      <div className="md:hidden absolute bottom-20 left-4 z-[650]">
+        <button
+          type="button"
+          onClick={() => setMobilePanelOpen(true)}
+          className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full p-3 shadow-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+          title="Filter &amp; Stationen"
+          aria-label="Filter und Stationen öffnen"
+        >
+          <SlidersHorizontal size={18} className="text-zinc-600 dark:text-zinc-300" />
+          {(filters.powerLevel || filters.connectorType || showOpenOnly) && (
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-zinc-900" />
+          )}
+        </button>
+      </div>
+
+      {/* Mobile Sheet – Filter & Stationen ──────────────────────────────── */}
+      <MobileSheet
+        open={mobilePanelOpen}
+        onClose={() => setMobilePanelOpen(false)}
+        title="Karte & Filter"
+        height="full"
+      >
+        <div className="space-y-4 py-1">
+          <StationSearch onLocationSelect={(lat, lng) => { handleLocationSelect(lat, lng); setMobilePanelOpen(false); }} />
+
+          <div>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Ladeleistung</p>
+            <div className="flex flex-wrap gap-1.5">
+              {POWER_CHIPS.map((chip) => (
+                <button
+                  key={chip.value}
+                  type="button"
+                  onClick={() => setFilters((f) => ({ ...f, powerLevel: f.powerLevel === chip.value ? null : chip.value }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                    filters.powerLevel === chip.value
+                      ? "bg-green-600 text-white border-green-600"
+                      : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
+                  }`}
+                >
+                  ⚡ {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Steckertyp</p>
+            <div className="flex flex-wrap gap-1.5">
+              {CONNECTOR_CHIPS.map((chip) => (
+                <button
+                  key={chip.value}
+                  type="button"
+                  onClick={() => setFilters((f) => ({ ...f, connectorType: f.connectorType === chip.value ? null : chip.value }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                    filters.connectorType === chip.value
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowOpenOnly((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                showOpenOnly ? "bg-amber-500 text-white border-amber-500" : "border-zinc-200 dark:border-zinc-700 text-zinc-500"
+              }`}
+            >
+              <Clock size={11} /> Jetzt geöffnet
+            </button>
+            {(filters.powerLevel || filters.connectorType || showOpenOnly) && (
+              <button
+                type="button"
+                onClick={() => { setFilters({ powerLevel: null, connectorType: null }); setShowOpenOnly(false); }}
+                className="flex items-center gap-1 text-xs text-red-500 border border-red-200 px-3 py-1.5 rounded-full"
+              >
+                <X size={11} /> Zurücksetzen
+              </button>
+            )}
+          </div>
+
+          <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-2">
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Schnellaktionen</p>
+            <button type="button" onClick={() => { handleLocateMe(); setMobilePanelOpen(false); }} disabled={locating} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:border-blue-400 disabled:opacity-60 transition-colors">
+              <NavIcon size={16} className={locating ? "animate-spin text-blue-500" : ""} />
+              {locating ? "Wird geortet…" : "Meinen Standort"}
+            </button>
+            <button type="button" onClick={() => { handleFindNearestHpc(); setMobilePanelOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:border-purple-400 transition-colors">
+              <Target size={16} /> Nächste HPC-Station
+            </button>
+            <button type="button" onClick={() => { handleFindNearestFree(); setMobilePanelOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:border-green-400 transition-colors">
+              <Target size={16} className="text-green-500" /> Nächste freie Station
+            </button>
+          </div>
+
+          {displayedStations.length > 0 && (
+            <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3">
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Stationen ({displayedStations.length})</p>
+              <div className="-mx-4">
+                {displayedStations.slice(0, 30).map((s) => (
+                  <button
+                    key={s.ID}
+                    type="button"
+                    onClick={() => { setSelectedStation(s); setFlyToCenter([s.AddressInfo.Latitude, s.AddressInfo.Longitude]); setMobilePanelOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-0 text-left transition-colors"
+                  >
+                    <StatusDot station={s} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate">{s.AddressInfo.Title}</p>
+                      <p className="text-xs text-zinc-400 truncate">{s.AddressInfo.Town}</p>
+                    </div>
+                    <PowerBadge connections={s.Connections} />
+                    <ChevronRight size={12} className="text-zinc-300 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </MobileSheet>
+
       {/* â•â•â• HPC Toast â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       {toast && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[600] bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-semibold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 animate-fade-in pointer-events-none">
+        <div className="absolute bottom-28 md:bottom-20 left-1/2 -translate-x-1/2 z-[600] bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-semibold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 animate-fade-in pointer-events-none">
           <Zap size={12} className="text-yellow-400 dark:text-yellow-600 shrink-0" />
           {toast}
         </div>

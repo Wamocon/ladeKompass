@@ -85,7 +85,10 @@ function injectCSS() {
 
 // --- Power-aware neon colour helpers ----------------------------------------
 function maxKw(station: OCMStation): number {
-  return Math.max(0, ...(station.Connections?.map((c) => c.PowerKW ?? 0) ?? []));
+  const kws = (station.Connections ?? [])
+    .map((c) => Number(c.PowerKW ?? 0))
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  return kws.length ? Math.max(0, ...kws) : 0;
 }
 
 function stationColor(station: OCMStation): string {
@@ -292,7 +295,7 @@ export function StationMapGL({
         filter: ["has", "point_count"],
         layout: {
           "text-field":  ["get", "point_count_abbreviated"],
-          "text-font":   ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-font":   ["Noto Sans Bold", "Arial Unicode MS Regular"],
           "text-size":   13,
         },
         paint: { "text-color": "#fff" },
@@ -457,7 +460,7 @@ export function StationMapGL({
       const priceId = `lk-price-${found.ID}`;
       const chargepriceUrl = `https://www.chargeprice.app/?station=${found.UUID}&source=ocm`;
 
-      const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}');this.closest('.maplibregl-popup').remove();" style="margin-top:10px;width:100%;padding:9px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">▶ Navigation starten</button>`;
+      const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}');var _p=this.closest('.maplibregl-popup');if(_p)_p.remove();" style="margin-top:10px;width:100%;padding:9px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">▶ Navigation starten</button>`;
 
       const html = `<div style="
         background:rgba(8,8,18,0.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
@@ -606,7 +609,7 @@ export function StationMapGL({
         });
         // Re-add layers (simplified repaint)
         map.addLayer({ id: CLUSTER_LAYER, type: "circle", source: SOURCE_ID, filter: ["has", "point_count"], paint: { "circle-color": ["step", ["get", "point_count"], "#00cc6a", 10, "#f59e0b", 50, "#ff4757"], "circle-radius": ["step", ["get", "point_count"], 20, 10, 28, 50, 36], "circle-stroke-width": 3, "circle-stroke-color": ["step", ["get", "point_count"], "rgba(0,204,106,0.5)", 10, "rgba(245,158,11,0.5)", 50, "rgba(255,71,87,0.5)"], "circle-opacity": 0.9 } });
-        map.addLayer({ id: CLUSTER_COUNT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"], "text-size": 13 }, paint: { "text-color": "#fff" } });
+        map.addLayer({ id: CLUSTER_COUNT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold", "Arial Unicode MS Regular"], "text-size": 13 }, paint: { "text-color": "#fff" } });
         map.addLayer({ id: POINT_GLOW_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], paint: { "circle-color": ["get", "color"], "circle-radius": ["interpolate", ["linear"], ["get", "maxKw"], 0, 12, 50, 16, 150, 22], "circle-opacity": 0.18, "circle-blur": 1.2 } });
         map.addLayer({ id: POINT_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], paint: { "circle-color": ["get", "color"], "circle-radius": ["interpolate", ["linear"], ["get", "maxKw"], 0, 6, 22, 8, 50, 10, 150, 13], "circle-stroke-width": 4, "circle-stroke-color": ["get", "glowColor"], "circle-stroke-opacity": 0.9, "circle-opacity": 1 } });
         map.addLayer({ id: HEATMAP_LAYER, type: "heatmap", source: SOURCE_ID, layout: { visibility: showHeatmap ? "visible" : "none" }, paint: { "heatmap-weight": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0, 350, 1], "heatmap-intensity": 1, "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,255,0)", 0.5, "royalblue", 1, "red"], "heatmap-radius": 20, "heatmap-opacity": 0.6 } });

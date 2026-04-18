@@ -16,7 +16,10 @@ export async function generateMetadata({
 
 export default function MapPage() {
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 56px)" }}>
+    <div
+      className="flex flex-col"
+      style={{ height: "calc(100svh - 56px)" }}
+    >
       <MapClientLoader />
     </div>
   );

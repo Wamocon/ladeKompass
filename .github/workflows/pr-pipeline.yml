@@ -1,53 +1,48 @@
 # =============================================================================
-# Caller Workflow — Manual Vercel Deployment
+# PR Quality Pipeline — TypeCheck · Lint · Build
 # =============================================================================
-# Source: Wamocon/github_workflow/examples/caller-production-deploy.yml
 #
-# Trigger : MANUAL ONLY — Actions tab → "Deploy to Vercel" → Run workflow
-#           Choose "production" (live URL) or "preview" (test URL) at run time.
-#           This workflow NEVER runs automatically.
+# Runs on every Pull Request targeting main or develop.
+# Blocks merging if typecheck, lint, or the Next.js build fails.
 #
-# Secrets required:
-#   - VERCEL_PROJECT_ID → add this to your repo's GitHub secrets
-#                         (Vercel Project → Settings → General → Project ID)
-#
-# Already set at organisation level (no action needed):
-#   - VERCEL_TOKEN   → personal Vercel access token
-#   - VERCEL_ORG_ID  → Vercel personal account ID
-#
-# How it works:
-#   Builds locally via Vercel CLI — Vercel never sees the GitHub repo owner,
-#   so there are no "team seat" errors on a personal Hobby account in a GitHub org.
+# Does NOT run deployments — see deploy.yml for that.
 # =============================================================================
 
-name: Deploy to Vercel
+name: PR Quality Pipeline
 
-# Restrict GITHUB_TOKEN to the minimum required — no write permissions needed
-# for a pure deployment caller workflow.
-permissions: {}
+permissions:
+  contents: read
 
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "Deploy target"
-        required: true
-        default: "production"
-        type: choice
-        options:
-          - production
-          - preview
-      db_schema:
-        description: "Optional NEXT_PUBLIC_DB_SCHEMA override (leave empty to use Vercel env vars)"
-        required: false
-        type: string
-        default: ""
+  pull_request:
+    branches: [main, develop]
 
 jobs:
-  deploy:
-    name: Deploy — ${{ inputs.environment }}
-    uses: Wamocon/github_workflow/.github/workflows/deploy.yml@main
-    with:
-      vercel_env: ${{ inputs.environment }}
-      db_schema: ${{ inputs.db_schema }}
-    secrets: inherit
+  quality:
+    name: TypeCheck · Lint · Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          # Dummy values so the build doesn't fail on missing env vars
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
