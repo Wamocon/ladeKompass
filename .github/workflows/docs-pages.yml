@@ -45,18 +45,23 @@ jobs:
           node-version: "20"
 
       - name: Install markdown-to-html converter
-        run: npm install -g marked
+        run: |
+          mkdir -p /tmp/md-build
+          cd /tmp/md-build
+          printf '{"type":"module"}\n' > package.json
+          npm install marked --silent
 
       - name: Create output directory
         run: mkdir -p _site
 
       - name: Convert Produkthandbuch Markdown → HTML
         run: |
-          cat > /tmp/convert.mjs << 'EOF'
+          cat > /tmp/md-build/convert.mjs << 'EOF'
           import { marked } from "marked";
           import { readFileSync, writeFileSync } from "fs";
 
-          const md = readFileSync("docs/Produkthandbuch-LadeKompass.md", "utf-8");
+          const ws = process.env.GITHUB_WORKSPACE;
+          const md = readFileSync(`${ws}/docs/Produkthandbuch-LadeKompass.md`, "utf-8");
           const body = marked.parse(md);
 
           const html = `<!DOCTYPE html>
@@ -339,10 +344,10 @@ jobs:
           </body>
           </html>`;
 
-          writeFileSync("_site/index.html", html, "utf-8");
+          writeFileSync(`${ws}/_site/index.html`, html, "utf-8");
           console.log("✓ _site/index.html generated");
           EOF
-          node /tmp/convert.mjs
+          cd /tmp/md-build && node convert.mjs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
