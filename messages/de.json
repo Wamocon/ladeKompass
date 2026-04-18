@@ -92,6 +92,8 @@
     "estimated_cost": "Voraussichtliche Kosten",
     "estimated_cost_value": "ca. {cost} €",
     "no_data": "Keine Tarifdaten verfügbar",
+    "check_operator": "Beim Betreiber prüfen ↗",
+    "check_goingelectric": "Tarif bei GoingElectric prüfen ↗",
     "loading": "Tarife werden geladen…",
     "community_hint": "Stand: {date}",
     "pro_required": "Tarifvergleich ab Lite-Tarif verfügbar"

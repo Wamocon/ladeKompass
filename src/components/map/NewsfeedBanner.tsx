@@ -175,11 +175,20 @@ export function NewsfeedBanner({ stations, userLocation, isNavActive }: Newsfeed
                         {price.toFixed(2)} €/kWh
                       </span>
                     ) : station.UsageCost ? (
-                      <span className="text-[9px] text-zinc-400 truncate ml-auto max-w-[80px]" title={station.UsageCost}>
-                        {station.UsageCost.slice(0, 18)}
-                        {station.UsageCost.length > 18 ? "…" : ""}
+                      <span className="text-[9px] text-zinc-500 dark:text-zinc-400 truncate ml-auto max-w-[100px]" title={station.UsageCost}>
+                        {station.UsageCost.length > 22 ? station.UsageCost.slice(0, 22) + "…" : station.UsageCost}
                       </span>
-                    ) : null}
+                    ) : (
+                      <a
+                        href={station.OperatorInfo?.WebsiteURL ?? `https://www.goingelectric.de/stromtankstellen/?q=${encodeURIComponent(station.AddressInfo.Title)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-0.5 text-[9px] font-semibold text-[var(--primary,#16a34a)] hover:underline ml-auto shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Tarif prüfen ↗
+                      </a>
+                    )}
                   </div>
                 </div>
               ))}

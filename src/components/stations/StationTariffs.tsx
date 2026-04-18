@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Zap, TrendingDown, Clock } from "lucide-react";
+import { Zap, TrendingDown, Clock, ExternalLink, Info } from "lucide-react";
 
 interface Tariff {
   id: string;
@@ -19,9 +19,13 @@ interface StationTariffsProps {
   stationId: string;
   lat: number;
   lng: number;
+  /** Raw OCM UsageCost text — shown as fallback when no structured tariffs available */
+  usageCost?: string | null;
+  /** Operator website URL — shown as "check at operator" link */
+  operatorUrl?: string | null;
 }
 
-export function StationTariffs({ stationId, lat, lng }: StationTariffsProps) {
+export function StationTariffs({ stationId, lat, lng, usageCost, operatorUrl }: StationTariffsProps) {
   const t = useTranslations("tariff");
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +59,44 @@ export function StationTariffs({ stationId, lat, lng }: StationTariffsProps) {
 
   if (tariffs.length === 0) {
     return (
-      <p className="text-xs text-[var(--text-muted)] py-1">{t("no_data")}</p>
+      <div className="space-y-2">
+        <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
+          {t("title")}
+        </p>
+        {usageCost ? (
+          // OCM has free-text price info — show it directly
+          <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5">
+            <Info size={13} className="shrink-0 mt-0.5 text-[var(--primary)]" />
+            <p className="text-xs text-[var(--text-base)]">{usageCost}</p>
+          </div>
+        ) : (
+          // No price data at all — link to operator
+          <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5">
+            <p className="text-xs text-[var(--text-muted)]">{t("no_data")}</p>
+            {operatorUrl ? (
+              <a
+                href={operatorUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline shrink-0 ml-3"
+              >
+                {t("check_operator")}
+                <ExternalLink size={11} />
+              </a>
+            ) : (
+              <a
+                href={`https://www.goingelectric.de/stromtankstellen/?q=${encodeURIComponent(`${lat},${lng}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline shrink-0 ml-3"
+              >
+                {t("check_goingelectric")}
+                <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 
