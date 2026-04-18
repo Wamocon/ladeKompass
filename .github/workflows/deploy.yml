@@ -3,16 +3,20 @@
 # =============================================================================
 #
 # Trigger overview:
-#   push (any branch)   → Preview deploy
-#                         NOTE: Only 'push' is used here — no 'pull_request'
-#                         trigger, so a push inside a PR fires exactly ONCE.
-#   release: published  → Production deploy
+#   push (any branch)   → Preview deploy (inlined, NOT via shared workflow)
+#                         Branch name is forwarded via VERCEL_GIT_COMMIT_REF so
+#                         Vercel can assign branch-based custom domains
+#                         (e.g. test.ladekompass.com → test branch).
+#                         IMPORTANT: GITHUB_ACTIONS and GITHUB_REPOSITORY are
+#                         always cleared before any vercel CLI call, so Vercel
+#                         never receives the GitHub actor / user identity.
+#   release: published  → Production deploy (via shared workflow)
 #   workflow_dispatch   → Manual: choose production or preview
 #
-# Secrets required:
-#   - VERCEL_PROJECT_ID (repo secret)
-# Already set at org level (no action needed):
-#   - VERCEL_TOKEN, VERCEL_ORG_ID
+# Secrets required (repo level):
+#   - VERCEL_PROJECT_ID
+# Set at org level (no action needed):
+#   - VERCEL_TOKEN, VERCEL_ORG_ID, ORG_PAT
 # =============================================================================
 
 name: Deploy to Vercel
@@ -41,19 +45,141 @@ on:
         default: ""
 
 jobs:
-  # ── Preview deploy ────────────────────────────────────────────────────────
+  # ── Preview deploy (inlined) ───────────────────────────────────────────────
+  # Inlined instead of using the shared workflow so we can set
+  # VERCEL_GIT_COMMIT_REF (branch name, NOT a user identity) in the deploy
+  # step. The shared workflow does not expose this as an input.
+  # GITHUB_ACTIONS and GITHUB_REPOSITORY are cleared before every vercel CLI
+  # call → Vercel never sees the GitHub actor or Hobby-plan user identity.
   preview:
     name: Preview Deploy
     if: >
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && inputs.environment == 'preview')
-    uses: Wamocon/github_workflow/.github/workflows/deploy.yml@main
-    with:
-      vercel_env: preview
-      db_schema: ${{ inputs.db_schema || '' }}
-    secrets: inherit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      CI: "1"
+      FORCE_COLOR: "0"
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  # ── Production deploy ─────────────────────────────────────────────────────
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sever Git Linkage
+        # Removes .git so vercel CLI cannot read git metadata that would expose
+        # the GitHub user identity to Vercel (Hobby plan restriction).
+        run: rm -rf .git
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment
+        run: |
+          export GITHUB_ACTIONS=""
+          export GITHUB_REPOSITORY=""
+          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Apply DB schema
+        run: |
+          SCHEMA="${{ inputs.db_schema }}"
+          if [[ -z "$SCHEMA" ]]; then SCHEMA="public"; fi
+          echo "NEXT_PUBLIC_DB_SCHEMA=$SCHEMA" >> "$GITHUB_ENV"
+          echo "DB schema set to: $SCHEMA"
+
+      - name: Build project
+        run: |
+          export GITHUB_ACTIONS=""
+          export GITHUB_REPOSITORY=""
+          vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        env:
+          # VERCEL_GIT_COMMIT_REF is the branch name only (e.g. "test").
+          # It is NOT a user identity — it tells Vercel which branch this
+          # deployment belongs to so branch-based domain rules apply
+          # (test.ladekompass.com → test branch).
+          # GITHUB_ACTIONS and GITHUB_REPOSITORY are cleared below so Vercel
+          # never reads GITHUB_ACTOR or any other user credential.
+          VERCEL_GIT_COMMIT_REF: ${{ github.ref_name }}
+          VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          export GITHUB_ACTIONS=""
+          export GITHUB_REPOSITORY=""
+          set -euo pipefail
+
+          rm -f vercel-deploy.log
+          deploy_ok=false
+
+          if vercel deploy --prebuilt --yes --token=${{ secrets.VERCEL_TOKEN }} > vercel-deploy.log 2>&1; then
+            deploy_ok=true
+          fi
+
+          echo "=========================================="
+          echo " FULL VERCEL DEPLOY LOG"
+          echo "=========================================="
+          cat vercel-deploy.log || true
+          echo "=========================================="
+
+          if [[ "$deploy_ok" != "true" ]]; then
+            echo "### Deployment Failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          DEPLOY_URL=$(grep -Eo 'https://[^[:space:]]+\.vercel\.app' vercel-deploy.log \
+            | grep -v '^$' | tail -n 1 || true)
+
+          if [[ -n "$DEPLOY_URL" ]]; then
+            echo "deploy_url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Deployed to Vercel"
+              echo "**Environment:** preview"
+              echo "**Branch:** ${{ github.ref_name }}"
+              echo "**Schema:** ${{ inputs.db_schema || 'public' }}"
+              echo "**URL:** $DEPLOY_URL"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Assign branch alias
+        # Since .git is removed, Vercel CLI cannot auto-detect the branch for
+        # custom domain routing. We explicitly assign the alias after deploy.
+        # Add more branch→domain mappings here as needed.
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.deploy_url }}
+        run: |
+          export GITHUB_ACTIONS=""
+          export GITHUB_REPOSITORY=""
+          BRANCH="${{ github.ref_name }}"
+          if [[ -z "$DEPLOY_URL" ]]; then
+            echo "No deploy URL available, skipping alias assignment."
+            exit 0
+          fi
+          case "$BRANCH" in
+            test)
+              ALIAS="test.ladekompass.com"
+              ;;
+            staging)
+              ALIAS="staging.ladekompass.com"
+              ;;
+            *)
+              echo "No alias defined for branch '$BRANCH', skipping."
+              exit 0
+              ;;
+          esac
+          echo "Assigning alias $ALIAS → $DEPLOY_URL"
+          vercel alias set "$DEPLOY_URL" "$ALIAS" --token=${{ secrets.VERCEL_TOKEN }} --yes || true
+          echo "Alias assigned: $ALIAS" >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Production deploy (shared workflow) ───────────────────────────────────
   production:
     name: Production Deploy
     if: >

@@ -82,6 +82,8 @@ export function StationDetail({ station, onClose }: StationDetailProps) {
           stationId={String(station.ID)}
           lat={addr.Latitude}
           lng={addr.Longitude}
+          usageCost={station.UsageCost}
+          operatorUrl={station.OperatorInfo?.WebsiteURL}
         />
       </div>
 

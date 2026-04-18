@@ -92,6 +92,8 @@
     "estimated_cost": "Estimated Cost",
     "estimated_cost_value": "approx. {cost} €",
     "no_data": "No tariff data available",
+    "check_operator": "Check at operator ↗",
+    "check_goingelectric": "Check tariff at GoingElectric ↗",
     "loading": "Loading tariffs…",
     "community_hint": "As of: {date}",
     "pro_required": "Tariff comparison available from Lite plan"
@@ -190,6 +192,7 @@
     "recent_stations": "Recently Reported",
     "favorites": "Favourites",
     "nearby_reports": "Community Reports Nearby",
+    "nearby_title": "Nearby",
     "no_recent": "No reports submitted yet.",
     "no_favorites": "No favourites saved yet.",
     "no_nearby": "No recent reports nearby.",

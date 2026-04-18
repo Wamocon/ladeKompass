@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { Metadata } from "next";
 import { NewsFeed } from "@/components/dashboard/NewsFeed";
+import { NearbyFeed } from "@/components/dashboard/NearbyFeed";
 import { PlanGate } from "@/components/ui/PlanGate";
 import { Navigation, MapPin, Car } from "lucide-react";
 import Link from "next/link";
@@ -127,7 +128,12 @@ export default async function DashboardPage({ params }: Props) {
           ))}
         </div>
 
-        {/* News Feed */}
+        {/* Nearby Feed — location-based stations (all plans) */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 mb-6">
+          <NearbyFeed />
+        </div>
+
+        {/* Community News Feed */}
         <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5">
           <PlanGate feature="newsFeed" requiredPlan="lite" userPlan={userPlan as "free" | "lite" | "pro"}>
             <NewsFeed />

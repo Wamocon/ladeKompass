@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   MapContainer,
@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl";
 import type { OCMStation } from "@/app/api/stations/route";
 import { StationDetail } from "@/components/stations/StationDetail";
 import type { StationFiltersState } from "./StationFilters";
+import { createEvPinHtml, getStationPinType, ALL_PIN_TYPES, PIN_LABELS, getEvPinDataUrl, type PinType } from "@/lib/map-icons";
 
 // Fix Leaflet default icon paths in Next.js
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -25,8 +26,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
-
-type StatusColor = "available" | "occupied" | "defect" | "unknown";
 
 export type MapStyle = "light" | "dark" | "satellite" | "standard";
 
@@ -49,46 +48,16 @@ const TILE_URLS: Record<MapStyle, { url: string; attribution: string }> = {
   },
 };
 
-function getStatusColor(color: StatusColor): string {
-  const colors: Record<StatusColor, string> = {
-    available: "#16a34a",
-    occupied: "#d97706",
-    defect: "#dc2626",
-    unknown: "#64748b",
-  };
-  return colors[color];
-}
-
-function getStatusGlow(color: StatusColor): string {
-  const glows: Record<StatusColor, string> = {
-    available: "rgba(22,163,74,0.4)",
-    occupied: "rgba(217,119,6,0.4)",
-    defect: "rgba(220,38,38,0.4)",
-    unknown: "rgba(100,116,139,0.3)",
-  };
-  return glows[color];
-}
-
-function createStationMarker(color: string, glow: string, powerKw: number) {
-  // Size based on power: HPC=28, DC=22, AC=18
-  const size = powerKw >= 150 ? 28 : powerKw >= 22 ? 22 : 18;
-  const bolt = powerKw >= 100 ? "âš¡" : powerKw >= 22 ? "âš¡" : "";
+/** Creates a Leaflet divIcon using the EV map pin SVG */
+function createStationMarker(type: PinType, powerKw: number) {
+  const size = powerKw >= 150 ? 36 : powerKw >= 22 ? 32 : 28;
+  const height = Math.round(size * 46 / 36);
   return L.divIcon({
     className: "",
-    html: `<div style="
-      width:${size}px;height:${size}px;
-      background:${color};
-      border:2.5px solid rgba(255,255,255,0.95);
-      border-radius:50%;
-      box-shadow:0 0 0 3px ${glow}, 0 2px 8px rgba(0,0,0,0.35);
-      display:flex;align-items:center;justify-content:center;
-      font-size:${size < 22 ? 9 : 11}px;
-      transition:transform 0.15s;
-      cursor:pointer;
-    ">${bolt}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -(size / 2 + 4)],
+    html: createEvPinHtml(type, size),
+    iconSize: [size, height],
+    iconAnchor: [size / 2, height],
+    popupAnchor: [0, -height],
   });
 }
 
@@ -189,20 +158,15 @@ function ClusterLayer({
     });
 
     stations.forEach((station) => {
-      const status: StatusColor = station.StatusType?.IsOperational
-        ? "available"
-        : station.StatusType
-          ? "defect"
-          : "unknown";
-
       const maxPower = Math.max(
         0,
         ...(station.Connections?.map((c) => c.PowerKW ?? 0) ?? []),
       );
+      const pinType = getStationPinType(maxPower, station.StatusType?.IsOperational ?? null);
 
       const marker = L.marker(
         [station.AddressInfo.Latitude, station.AddressInfo.Longitude],
-        { icon: createStationMarker(getStatusColor(status), getStatusGlow(status), maxPower) },
+        { icon: createStationMarker(pinType, maxPower) },
       );
 
       marker.on("click", () => onSelect(station));
@@ -386,23 +350,21 @@ export function StationMap({
         </div>
       )}
 
-      {/* Legend bottom-right */}
-      <div className="absolute bottom-4 right-4 z-[400] bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm border border-[var(--border)] rounded-xl px-3 py-2 shadow text-xs space-y-1 hidden sm:block">
-        {(["available", "occupied", "defect", "unknown"] as StatusColor[]).map((s) => (
-          <div key={s} className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ background: getStatusColor(s), boxShadow: `0 0 0 2px ${getStatusGlow(s)}` }}
+      {/* Legend bottom-right — EV pin icon types */}
+      <div className="absolute bottom-4 right-4 z-[400] bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm border border-[var(--border)] rounded-xl px-3 py-2 shadow text-xs space-y-1.5 hidden sm:block">
+        {ALL_PIN_TYPES.map((type) => (
+          <div key={type} className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={getEvPinDataUrl(type)}
+              alt={PIN_LABELS[type]}
+              width={16}
+              height={20}
+              className="shrink-0"
             />
-            <span className="text-[var(--text-muted)]">
-              {t(`status_${s}` as "status_available" | "status_occupied" | "status_defect" | "status_unknown")}
-            </span>
+            <span className="text-[var(--text-muted)]">{PIN_LABELS[type]}</span>
           </div>
         ))}
-        <div className="pt-1 mt-1 border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] space-y-0.5">
-          <div>ðŸŸ¢ â‰¥22 kW (DC)</div>
-          <div>âš¡ â‰¥100 kW (HPC)</div>
-        </div>
       </div>
     </div>
   );

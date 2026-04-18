@@ -16,6 +16,7 @@ export default defineConfig({
         "src/lib/plan-limits.ts",
         "src/lib/legal/consent.ts",
         "src/lib/route-calc.ts",
+        "src/lib/map-icons.ts",
       ],
       thresholds: {
         lines: 100,

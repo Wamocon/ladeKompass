@@ -6,6 +6,37 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { StationFiltersState } from "./StationFilters";
 import type { OCMStation } from "@/app/api/stations/route";
 import type { PlannedChargingStop } from "@/lib/charging-stops";
+import {
+  ALL_PIN_TYPES,
+  getEvPinSvg,
+  getStationPinType,
+  type PinType,
+} from "@/lib/map-icons";
+
+// ─── Canvas-based SVG → ImageData ─────────────────────────────────────────────
+// MapLibre GL v5 uses fetch() internally for loadImage(), which cannot decode
+// SVG data: URLs. Converting SVG via an off-screen canvas produces raw ImageData
+// that MapLibre can consume directly via map.addImage().
+function loadSvgPinImage(
+  svgString: string,
+  width = 36,
+  height = 46,
+): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { reject(new Error("Canvas 2D not available")); return; }
+    const img = new Image(width, height);
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(ctx.getImageData(0, 0, width, height));
+    };
+    img.onerror = () => reject(new Error("SVG pin render failed"));
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+  });
+}
 
 export type MapStyle = "light" | "dark" | "bright" | "standard";
 
@@ -129,6 +160,7 @@ function stationsToGeoJSON(stations: OCMStation[]): GeoJSON.FeatureCollection {
         maxKw:     maxKw(s),
         color:     stationColor(s),
         glowColor: stationGlowColor(s),
+        pinType:   `ev-pin-${getStationPinType(maxKw(s), s.StatusType?.IsOperational ?? null)}`,
         operator:  s.OperatorInfo?.Title ?? "",
         isOpen247: s.OpeningTimes?.IsOpen247 ?? false,
         dataProviderId: (s as OCMStation & { DataProvider?: { ID: number } }).DataProvider?.ID ?? 0,
@@ -250,10 +282,41 @@ export function StationMapGL({
       style:            STYLE_URLS[mapStyle],
       center:           [lng, lat],
       zoom:             6,
-      // attributionControl defaults to true in maplibre-gl v5
+      // Use system fonts for ideographic (CJK) characters.
+      localIdeographFontFamily: "sans-serif",
+      // OpenFreeMap's glyph server returns HTML (not PBF) for the fonts used
+      // in their tile styles → MapLibre protobuf parser throws "Unimplemented
+      // type: 4" (HTML '<' byte = 0x3C = protobuf wire type 4). Fix: redirect
+      // ALL Glyph requests to MapLibre's own demo font server which returns
+      // valid PBF binary for MapLibre GL v5. Also strip fallback font-stack
+      // entries (comma-separated) so only the primary font is requested.
+      transformRequest: (url: string, resourceType?: maplibregl.ResourceType) => {
+        if (resourceType === "Glyphs") {
+          // Match both /font/ and /fonts/ path styles
+          const m = url.match(/\/fonts?\/([^/]+)(\/\d+-\d+\.pbf.*)$/);
+          if (m) {
+            const primary = decodeURIComponent(m[1]).split(",")[0].trim();
+            return {
+              url: `https://demotiles.maplibre.org/font/${encodeURIComponent(primary)}${m[2]}`,
+            };
+          }
+        }
+        return { url };
+      },
     });
 
     mapRef.current = map;
+
+    // --- Load EV pin icons on demand (canvas-based; SVG data: URLs cannot be
+    // decoded by MapLibre GL v5's internal loadImage / fetch pipeline) ----------
+    map.on("styleimagemissing", (e: { id: string }) => {
+      if (!e.id.startsWith("ev-pin-")) return;
+      const type = e.id.replace("ev-pin-", "") as PinType;
+      if (!ALL_PIN_TYPES.includes(type)) return;
+      void loadSvgPinImage(getEvPinSvg(type)).then((imageData) => {
+        if (!map.hasImage(e.id)) map.addImage(e.id, imageData, { sdf: false });
+      }).catch(() => { /* ignore individual render failures */ });
+    });
 
     // Custom zoom controls (top-right)
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
@@ -288,6 +351,8 @@ export function StationMapGL({
       });
 
       // Cluster count label
+      // No "text-font" override — inherit from tile style to avoid 404s for
+      // font stacks that aren't hosted on the OpenFreeMap glyph server.
       map.addLayer({
         id:     CLUSTER_COUNT_LAYER,
         type:   "symbol",
@@ -295,7 +360,6 @@ export function StationMapGL({
         filter: ["has", "point_count"],
         layout: {
           "text-field":  ["get", "point_count_abbreviated"],
-          "text-font":   ["Noto Sans Bold", "Arial Unicode MS Regular"],
           "text-size":   13,
         },
         paint: { "text-color": "#fff" },
@@ -315,19 +379,17 @@ export function StationMapGL({
         },
       });
 
-      // Individual station dot — power-level sized + neon glow stroke
+      // Individual station — EV map pin icon (type + power-level sized)
       map.addLayer({
         id:     POINT_LAYER,
-        type:   "circle",
+        type:   "symbol",
         source: SOURCE_ID,
         filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-color":         ["get", "color"],
-          "circle-radius":        ["interpolate", ["linear"], ["get", "maxKw"], 0, 6, 22, 8, 50, 10, 150, 13],
-          "circle-stroke-width":  4,
-          "circle-stroke-color":  ["get", "glowColor"],
-          "circle-stroke-opacity": 0.9,
-          "circle-opacity":       1,
+        layout: {
+          "icon-image":         ["get", "pinType"],
+          "icon-size":          ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 22, 0.65, 50, 0.78, 150, 0.95],
+          "icon-allow-overlap": true,
+          "icon-anchor":        "bottom",
         },
       });
 
@@ -609,9 +671,14 @@ export function StationMapGL({
         });
         // Re-add layers (simplified repaint)
         map.addLayer({ id: CLUSTER_LAYER, type: "circle", source: SOURCE_ID, filter: ["has", "point_count"], paint: { "circle-color": ["step", ["get", "point_count"], "#00cc6a", 10, "#f59e0b", 50, "#ff4757"], "circle-radius": ["step", ["get", "point_count"], 20, 10, 28, 50, 36], "circle-stroke-width": 3, "circle-stroke-color": ["step", ["get", "point_count"], "rgba(0,204,106,0.5)", 10, "rgba(245,158,11,0.5)", 50, "rgba(255,71,87,0.5)"], "circle-opacity": 0.9 } });
-        map.addLayer({ id: CLUSTER_COUNT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold", "Arial Unicode MS Regular"], "text-size": 13 }, paint: { "text-color": "#fff" } });
+        map.addLayer({ id: CLUSTER_COUNT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 13 }, paint: { "text-color": "#fff" } });
         map.addLayer({ id: POINT_GLOW_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], paint: { "circle-color": ["get", "color"], "circle-radius": ["interpolate", ["linear"], ["get", "maxKw"], 0, 12, 50, 16, 150, 22], "circle-opacity": 0.18, "circle-blur": 1.2 } });
-        map.addLayer({ id: POINT_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], paint: { "circle-color": ["get", "color"], "circle-radius": ["interpolate", ["linear"], ["get", "maxKw"], 0, 6, 22, 8, 50, 10, 150, 13], "circle-stroke-width": 4, "circle-stroke-color": ["get", "glowColor"], "circle-stroke-opacity": 0.9, "circle-opacity": 1 } });
+        // Reload pin images after style change (canvas-based approach)
+        void Promise.allSettled(ALL_PIN_TYPES.map(async (type) => {
+          const imageData = await loadSvgPinImage(getEvPinSvg(type));
+          if (!map.hasImage(`ev-pin-${type}`)) map.addImage(`ev-pin-${type}`, imageData, { sdf: false });
+        }));
+        map.addLayer({ id: POINT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], layout: { "icon-image": ["get", "pinType"], "icon-size": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 22, 0.65, 50, 0.78, 150, 0.95], "icon-allow-overlap": true, "icon-anchor": "bottom" } });
         map.addLayer({ id: HEATMAP_LAYER, type: "heatmap", source: SOURCE_ID, layout: { visibility: showHeatmap ? "visible" : "none" }, paint: { "heatmap-weight": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0, 350, 1], "heatmap-intensity": 1, "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,255,0)", 0.5, "royalblue", 1, "red"], "heatmap-radius": 20, "heatmap-opacity": 0.6 } });
       }
       // Re-add route source/layers after style change
@@ -806,15 +873,15 @@ export function StationMapGL({
 
     chargingStops.forEach((stop, i) => {
       const el = document.createElement("div");
-      el.style.cssText = [
-        "width:30px;height:30px;border-radius:50%",
-        "background:#f97316;border:3px solid #fff",
-        "box-shadow:0 0 0 3px rgba(249,115,22,0.4),0 2px 8px rgba(0,0,0,0.35)",
-        "display:flex;align-items:center;justify-content:center",
-        "cursor:pointer;font-weight:900;font-size:12px;color:#fff",
-        "font-family:system-ui,sans-serif",
-      ].join(";");
-      el.textContent = String(i + 1);
+      // Orange EV pin with stop number overlay
+      const orangePin = getEvPinSvg("offline").replace(
+        / fill="#dc2626"/g, " fill=\"#f97316\""
+      ).replace(
+        / flood-color="rgba\(220,38,38,[^)]+\)"/,
+        " flood-color=\"rgba(249,115,22,0.55)\""
+      );
+      el.style.cssText = "position:relative;width:36px;height:46px;cursor:pointer;";
+      el.innerHTML = `${orangePin}<span style="position:absolute;top:6px;left:50%;transform:translateX(-50%);font-weight:900;font-size:11px;color:#fff;font-family:system-ui,sans-serif;pointer-events:none">${i + 1}</span>`;
       el.title = `${stop.name} · ${stop.powerKw} kW · ~${stop.estimatedChargingMinutes} min`;
 
       const marker = new maplibregl.Marker({ element: el })

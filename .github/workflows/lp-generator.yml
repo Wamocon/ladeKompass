@@ -1,13 +1,8 @@
 name: Reusable LP Generator (Central Logic)
 
-# workflow_call allows this workflow to be called by other repositories in the Org
+# Manual trigger only — run via Actions tab → "Reusable LP Generator" → Run workflow
 on:
-  workflow_call:
-
-# Restrict GITHUB_TOKEN — repo operations use ORG_PAT secret, not GITHUB_TOKEN.
-# Only contents:read is needed for the checkout step.
-permissions:
-  contents: read
+  workflow_dispatch:
     inputs:
       template_repo:
         description: "The repository used as the design template"
@@ -17,17 +12,16 @@ permissions:
         description: "The name of the landing page repository to be created"
         required: true
         type: string
+        default: "generated_lp"
       ai_prompt:
         description: "The specific instructions for GitHub Copilot"
         required: true
         type: string
-    secrets:
-      ORG_PAT:
-        description: "Token for repo creation and git operations (Org-scoped)"
-        required: true
-      COPILOT_PAT:
-        description: "Token with Copilot permissions (User-scoped)"
-        required: true
+
+# Restrict GITHUB_TOKEN — repo operations use ORG_PAT secret, not GITHUB_TOKEN.
+# Only contents:read is needed for the checkout step.
+permissions:
+  contents: read
 
 jobs:
   generate-lp:

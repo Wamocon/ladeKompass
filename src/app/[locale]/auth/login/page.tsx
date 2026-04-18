@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { Eye, EyeOff, Loader, AlertCircle, Mail, Lock, User, Zap } from "lucide-react";
@@ -16,7 +15,6 @@ import {
 export default function LoginPage() {
   const t = useTranslations("auth");
   const locale = useLocale();
-  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -66,8 +64,8 @@ export default function LoginPage() {
           password,
         });
         if (signInError) throw signInError;
-        router.push(`/${locale}/dashboard`);
-        router.refresh();
+        // Hard redirect so the browser sends fresh session cookies to the server
+        window.location.href = `/${locale}/dashboard`;
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
