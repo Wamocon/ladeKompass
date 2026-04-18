@@ -149,6 +149,36 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Assign branch alias
+        # Since .git is removed, Vercel CLI cannot auto-detect the branch for
+        # custom domain routing. We explicitly assign the alias after deploy.
+        # Add more branch→domain mappings here as needed.
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.deploy_url }}
+        run: |
+          export GITHUB_ACTIONS=""
+          export GITHUB_REPOSITORY=""
+          BRANCH="${{ github.ref_name }}"
+          if [[ -z "$DEPLOY_URL" ]]; then
+            echo "No deploy URL available, skipping alias assignment."
+            exit 0
+          fi
+          case "$BRANCH" in
+            test)
+              ALIAS="test.ladekompass.com"
+              ;;
+            staging)
+              ALIAS="staging.ladekompass.com"
+              ;;
+            *)
+              echo "No alias defined for branch '$BRANCH', skipping."
+              exit 0
+              ;;
+          esac
+          echo "Assigning alias $ALIAS → $DEPLOY_URL"
+          vercel alias set "$DEPLOY_URL" "$ALIAS" --token=${{ secrets.VERCEL_TOKEN }} --yes || true
+          echo "Alias assigned: $ALIAS" >> "$GITHUB_STEP_SUMMARY"
+
   # ── Production deploy (shared workflow) ───────────────────────────────────
   production:
     name: Production Deploy
