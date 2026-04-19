@@ -594,6 +594,11 @@ export default function StationMapWrapper() {
                   showHeatmap ? "bg-orange-200 text-orange-800" : "bg-zinc-100 text-zinc-400"
                 }`}>{showHeatmap ? "AN" : "AUS"}</span>
               </button>
+              {showHeatmap && (
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-snug px-1">
+                  Zeigt die Dichte aller Ladestationen in Deutschland. Je wärmer die Farbe (gelb/rot), desto mehr Stationen sind in diesem Gebiet konzentriert — ideal zur Erkennung von Versorgungslücken.
+                </p>
+              )}
             </div>
           </PanelSection>
 
@@ -624,7 +629,7 @@ export default function StationMapWrapper() {
       </div>
 
       {/* ═══ Mobile FAB – Filter & Stationen (mobile only) ════════════════ */}
-      <div className="md:hidden absolute bottom-20 left-4 z-[650]">
+      <div className="md:hidden absolute bottom-20 left-4 z-[620]">
         <button
           type="button"
           onClick={() => setMobilePanelOpen(true)}

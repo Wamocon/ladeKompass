@@ -342,11 +342,11 @@ export function StationMapGL({
         source: SOURCE_ID,
         filter: ["has", "point_count"],
         paint: {
-          "circle-color":        ["step", ["get", "point_count"], "#00cc6a", 10, "#f59e0b", 50, "#ff4757"],
+          "circle-color":        ["step", ["get", "point_count"], "#00ff88", 10, "#fbbf24", 50, "#ff4757"],
           "circle-radius":       ["step", ["get", "point_count"], 20, 10, 28, 50, 36],
-          "circle-stroke-width": 3,
-          "circle-stroke-color": ["step", ["get", "point_count"], "rgba(0,204,106,0.5)", 10, "rgba(245,158,11,0.5)", 50, "rgba(255,71,87,0.5)"],
-          "circle-opacity":      0.9,
+          "circle-stroke-width": 4,
+          "circle-stroke-color": ["step", ["get", "point_count"], "#00cc6a", 10, "#f59e0b", 50, "#ff4757"],
+          "circle-opacity":      1.0,
         },
       });
 
@@ -372,10 +372,11 @@ export function StationMapGL({
         source: SOURCE_ID,
         filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-color":   ["get", "color"],
-          "circle-radius":  ["interpolate", ["linear"], ["get", "maxKw"], 0, 12, 50, 16, 150, 22],
-          "circle-opacity": 0.18,
-          "circle-blur":    1.2,
+          "circle-color":        ["get", "color"],
+          "circle-radius":       ["interpolate", ["linear"], ["get", "maxKw"], 0, 12, 50, 16, 150, 22],
+          "circle-opacity":      0.40,
+          "circle-blur":         1.2,
+          "circle-stroke-width": 0,
         },
       });
 
@@ -387,7 +388,7 @@ export function StationMapGL({
         filter: ["!", ["has", "point_count"]],
         layout: {
           "icon-image":         ["get", "pinType"],
-          "icon-size":          ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 22, 0.65, 50, 0.78, 150, 0.95],
+          "icon-size":          ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.1, 22, 1.3, 50, 1.56, 150, 1.9],
           "icon-allow-overlap": true,
           "icon-anchor":        "bottom",
         },
@@ -670,15 +671,15 @@ export function StationMapGL({
           cluster: true, clusterMaxZoom: 13, clusterRadius: 50,
         });
         // Re-add layers (simplified repaint)
-        map.addLayer({ id: CLUSTER_LAYER, type: "circle", source: SOURCE_ID, filter: ["has", "point_count"], paint: { "circle-color": ["step", ["get", "point_count"], "#00cc6a", 10, "#f59e0b", 50, "#ff4757"], "circle-radius": ["step", ["get", "point_count"], 20, 10, 28, 50, 36], "circle-stroke-width": 3, "circle-stroke-color": ["step", ["get", "point_count"], "rgba(0,204,106,0.5)", 10, "rgba(245,158,11,0.5)", 50, "rgba(255,71,87,0.5)"], "circle-opacity": 0.9 } });
+        map.addLayer({ id: CLUSTER_LAYER, type: "circle", source: SOURCE_ID, filter: ["has", "point_count"], paint: { "circle-color": ["step", ["get", "point_count"], "#00ff88", 10, "#fbbf24", 50, "#ff4757"], "circle-radius": ["step", ["get", "point_count"], 20, 10, 28, 50, 36], "circle-stroke-width": 4, "circle-stroke-color": ["step", ["get", "point_count"], "#00cc6a", 10, "#f59e0b", 50, "#ff4757"], "circle-opacity": 1.0 } });
         map.addLayer({ id: CLUSTER_COUNT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 13 }, paint: { "text-color": "#fff" } });
-        map.addLayer({ id: POINT_GLOW_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], paint: { "circle-color": ["get", "color"], "circle-radius": ["interpolate", ["linear"], ["get", "maxKw"], 0, 12, 50, 16, 150, 22], "circle-opacity": 0.18, "circle-blur": 1.2 } });
+        map.addLayer({ id: POINT_GLOW_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], paint: { "circle-color": ["get", "color"], "circle-radius": ["interpolate", ["linear"], ["get", "maxKw"], 0, 12, 50, 16, 150, 22], "circle-opacity": 0.40, "circle-blur": 1.2, "circle-stroke-width": 0 } });
         // Reload pin images after style change (canvas-based approach)
         void Promise.allSettled(ALL_PIN_TYPES.map(async (type) => {
           const imageData = await loadSvgPinImage(getEvPinSvg(type));
           if (!map.hasImage(`ev-pin-${type}`)) map.addImage(`ev-pin-${type}`, imageData, { sdf: false });
         }));
-        map.addLayer({ id: POINT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], layout: { "icon-image": ["get", "pinType"], "icon-size": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 22, 0.65, 50, 0.78, 150, 0.95], "icon-allow-overlap": true, "icon-anchor": "bottom" } });
+        map.addLayer({ id: POINT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], layout: { "icon-image": ["get", "pinType"], "icon-size": ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.1, 22, 1.3, 50, 1.56, 150, 1.9], "icon-allow-overlap": true, "icon-anchor": "bottom" } });
         map.addLayer({ id: HEATMAP_LAYER, type: "heatmap", source: SOURCE_ID, layout: { visibility: showHeatmap ? "visible" : "none" }, paint: { "heatmap-weight": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0, 350, 1], "heatmap-intensity": 1, "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,255,0)", 0.5, "royalblue", 1, "red"], "heatmap-radius": 20, "heatmap-opacity": 0.6 } });
       }
       // Re-add route source/layers after style change
@@ -880,7 +881,7 @@ export function StationMapGL({
         / flood-color="rgba\(220,38,38,[^)]+\)"/,
         " flood-color=\"rgba(249,115,22,0.55)\""
       );
-      el.style.cssText = "position:relative;width:36px;height:46px;cursor:pointer;";
+      el.style.cssText = "position:relative;width:72px;height:92px;cursor:pointer;";
       el.innerHTML = `${orangePin}<span style="position:absolute;top:6px;left:50%;transform:translateX(-50%);font-weight:900;font-size:11px;color:#fff;font-family:system-ui,sans-serif;pointer-events:none">${i + 1}</span>`;
       el.title = `${stop.name} · ${stop.powerKw} kW · ~${stop.estimatedChargingMinutes} min`;
 

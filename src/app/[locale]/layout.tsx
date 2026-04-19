@@ -102,7 +102,7 @@ export default async function LocaleLayout({
         <main className="flex-1 pb-mobile-nav">{children}</main>
         <Footer />
         <CookieBanner />
-        <BottomNav isAuthenticated={isAuthenticated} />
+        <BottomNav isAuthenticated={isAuthenticated} userRole={userRole} />
       </div>
     </NextIntlClientProvider>
   );
