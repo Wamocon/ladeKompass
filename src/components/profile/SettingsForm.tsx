@@ -60,6 +60,7 @@ export interface SettingsFormProps {
     preferred_connector?: string | null;
     min_charge_kw?: number | null;
     charge_stop_soc?: number | null;
+    map_prefs?: Record<string, unknown> | null;
   };
   userEmail: string;
 }
@@ -102,19 +103,25 @@ const CONNECTOR_OPTS = [
 ] as const;
 const MAP_PREFS_KEY = "lk-map-prefs";
 
-function loadPrefs() {
-  if (typeof window === "undefined") return null;
-  try { return JSON.parse(localStorage.getItem(MAP_PREFS_KEY) ?? "{}"); } catch { return {}; }
-}
-
-function MapPrefsSection() {
-  const [prefs, setPrefs] = useState<Record<string, unknown>>(() => loadPrefs() ?? {});
+function MapPrefsSection({ initialPrefs }: { initialPrefs?: Record<string, unknown> | null }) {
+  // Initialise from Supabase (cross-device) → localStorage fallback.
+  // Lazy initializer is safe here: runs client-side only, avoids SSR hydration mismatch.
+  const [prefs, setPrefs] = useState<Record<string, unknown>>(() => {
+    if (initialPrefs && Object.keys(initialPrefs).length > 0) return initialPrefs;
+    if (typeof window !== "undefined") {
+      try { return JSON.parse(localStorage.getItem(MAP_PREFS_KEY) ?? "{}") ?? {}; } catch { /* */ }
+    }
+    return {};
+  });
   const [saved, setSaved] = useState(false);
 
   function update(key: string, value: unknown) {
     const next = { ...prefs, [key]: value };
     setPrefs(next);
-    try { localStorage.setItem(MAP_PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    // Persist to localStorage (fast, map reads from here)
+    try { localStorage.setItem(MAP_PREFS_KEY, JSON.stringify(next)); } catch { /* */ }
+    // Persist to Supabase (survives localStorage clear + cross-device)
+    updateProfile({ map_prefs: next }).catch(() => {});
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -532,7 +539,7 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
       </section>
 
       {/* 6. Karten-Einstellungen (localStorage) */}
-      <MapPrefsSection />
+      <MapPrefsSection initialPrefs={initialProfile.map_prefs} />
 
       {/* 7. DSGVO & Konto */}
       <section className="bg-(--bg-surface) border border-(--border) rounded-2xl p-5">

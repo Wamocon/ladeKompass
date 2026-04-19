@@ -17,6 +17,7 @@ export interface ProfileUpdateInput {
   charge_stop_soc?: number;
   preferred_networks?: string[];
   locale_pref?: string;
+  map_prefs?: Record<string, unknown>;
 }
 
 export async function updateProfile(input: ProfileUpdateInput): Promise<{ error?: string }> {

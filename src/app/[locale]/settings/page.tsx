@@ -26,7 +26,7 @@ export default async function SettingsPage({ params }: Props) {
   const serviceSupabase = createServiceClient();
   const { data: profile } = await serviceSupabase
     .from("profiles")
-    .select("display_name, phone, bio, home_address, work_address, notify_station_status, notify_news, notify_promotions, preferred_connector, min_charge_kw, charge_stop_soc")
+    .select("display_name, phone, bio, home_address, work_address, notify_station_status, notify_news, notify_promotions, preferred_connector, min_charge_kw, charge_stop_soc, map_prefs")
     .eq("id", user.id)
     .maybeSingle();
 

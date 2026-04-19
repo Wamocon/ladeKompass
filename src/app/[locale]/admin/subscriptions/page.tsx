@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import { Metadata } from "next";
-import { Shield } from "lucide-react";
+import { Shield, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { AdminSubscriptionsTable, type SubProfile } from "@/components/admin/AdminSubscriptionsTable";
 
 interface Props {
   params: Promise<{ locale: string }>;
@@ -17,153 +18,131 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-interface Subscription {
-  id: string;
-  user_id: string;
-  plan: string;
-  monthly_routes_used: number;
-  monthly_routes_limit: number | null;
-  created_at: string;
-  profiles: { display_name: string | null; email: string | null } | null;
-}
-
 export default async function AdminSubscriptionsPage({ params }: Props) {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "admin" });
 
-  const cookieStore = await cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return (
-      <main className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
-        <p className="text-sm text-[var(--text-muted)]">
-          Service role key not configured.
-        </p>
-      </main>
-    );
-  }
-
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    db: { schema: process.env.SUPABASE_DB_SCHEMA ?? "ladekompass-dev" },
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          for (const { name, value, options } of cookiesToSet) {
-            cookieStore.set(name, value, options);
-          }
-        } catch {
-          // Server Component — token refresh silent
-        }
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Auth + role check
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/${locale}/auth/login`);
 
-  const { data: profile } = await supabase
+  const svc = createServiceClient();
+  const { data: myProfile } = await svc
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profile?.role !== "super_admin") redirect(`/${locale}/admin`);
+  if (myProfile?.role !== "super_admin") redirect(`/${locale}/admin`);
 
-  const { data: subs } = await supabase
-    .from("subscriptions")
-    .select("*, profiles(display_name, email)")
+  // Fetch all profiles with subscription fields (added by migration 20260419000002).
+  // Graceful fallback if migration hasn't been run yet.
+  const { data: profiles, error } = await svc
+    .from("profiles")
+    .select(
+      "id, display_name, plan, role, created_at, plan_started_at, plan_expires_at, is_trial, trial_ends_at",
+    )
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(200);
 
-  const subscriptions = (subs ?? []) as Subscription[];
+  let allProfiles: SubProfile[];
+  if (error && (error.message.includes("column") || error.message.includes("does not exist"))) {
+    const { data: fallback } = await svc
+      .from("profiles")
+      .select("id, display_name, plan, role, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    allProfiles = ((fallback ?? []) as SubProfile[]).map((p) => ({
+      ...p,
+      plan_started_at: null,
+      plan_expires_at: null,
+      is_trial: null,
+      trial_ends_at: null,
+    }));
+  } else {
+    allProfiles = (profiles ?? []) as SubProfile[];
+  }
+
+  // Sort: pro first, then lite, then free
+  allProfiles.sort((a, b) => {
+    const order: Record<string, number> = { pro: 0, lite: 1, free: 2 };
+    return (order[a.plan ?? "free"] ?? 2) - (order[b.plan ?? "free"] ?? 2);
+  });
+
+  // Fetch emails from auth admin API
+  let emailMap: Record<string, string> = {};
+  try {
+    const { data: { users: authUsers } } = await svc.auth.admin.listUsers({ perPage: 200 });
+    emailMap = Object.fromEntries((authUsers ?? []).map((u) => [u.id, u.email ?? ""]));
+  } catch { /* service role might not have admin API access in all envs */ }
+
+  const planCount = {
+    pro:   allProfiles.filter((p) => p.plan === "pro").length,
+    lite:  allProfiles.filter((p) => p.plan === "lite").length,
+    free:  allProfiles.filter((p) => (p.plan ?? "free") === "free").length,
+    trial: allProfiles.filter((p) => p.is_trial).length,
+  };
+
+  const migrationNeeded =
+    error && (error.message.includes("column") || error.message.includes("does not exist"));
 
   return (
     <main className="min-h-screen bg-[var(--bg-page)] px-4 py-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
+      <div className="max-w-6xl mx-auto space-y-4">
+        {/* Header */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link
+            href={`/${locale}/admin`}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </Link>
           <Shield size={20} className="text-[var(--primary)]" />
           <h1 className="text-xl font-bold text-[var(--text-base)]">
             {t("subscriptions_title", { fallback: "Abonnements" })}
           </h1>
-        </div>
-
-        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">
-                  <th className="text-left px-4 py-3 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                    {t("col_user", { fallback: "Nutzer" })}
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                    {t("col_plan", { fallback: "Plan" })}
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                    {t("col_routes", { fallback: "Routen/Monat" })}
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                    {t("col_since", { fallback: "Seit" })}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {subscriptions.map((sub) => {
-                  const planColors: Record<string, string> = {
-                    pro: "bg-[var(--primary)] text-white",
-                    lite: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                    free: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-                  };
-                  return (
-                    <tr key={sub.id} className="hover:bg-[var(--bg-elevated)] transition-colors">
-                      <td className="px-4 py-3 text-[var(--text-base)]">
-                        <p className="font-medium">
-                          {sub.profiles?.display_name ?? "—"}
-                        </p>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {sub.profiles?.email ?? sub.user_id}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                            planColors[sub.plan] ?? planColors.free
-                          }`}
-                        >
-                          {sub.plan?.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-muted)]">
-                        {sub.monthly_routes_used} /{" "}
-                        {sub.monthly_routes_limit ?? "∞"}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-muted)] text-xs">
-                        {new Date(sub.created_at).toLocaleDateString("de-DE")}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {subscriptions.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-8 text-center text-sm text-[var(--text-muted)]"
-                    >
-                      {t("no_subscriptions", { fallback: "Keine Abonnements vorhanden." })}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <span className="text-xs bg-[var(--bg-elevated)] px-2.5 py-1 rounded-full font-medium text-[var(--text-muted)]">
+              {allProfiles.length} Nutzer
+            </span>
+            <span className="text-xs bg-[var(--primary)] text-white px-2.5 py-1 rounded-full font-bold">
+              {planCount.pro} PRO
+            </span>
+            <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2.5 py-1 rounded-full font-bold">
+              {planCount.lite} Lite
+            </span>
+            {planCount.trial > 0 && (
+              <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2.5 py-1 rounded-full font-semibold">
+                {planCount.trial} Trial
+              </span>
+            )}
           </div>
         </div>
+
+        {/* Migration hint */}
+        {migrationNeeded && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-300">
+            <strong>Migration ausstehend:</strong> Trial/Ablaufdatum-Felder fehlen noch.
+            Führe{" "}
+            <code className="font-mono text-xs bg-amber-100 dark:bg-amber-900/40 px-1 rounded">
+              supabase/migrations/20260419000002_subscription-management.sql
+            </code>{" "}
+            im Supabase Dashboard SQL-Editor aus. Plan-Änderungen funktionieren bereits.
+          </div>
+        )}
+
+        <AdminSubscriptionsTable
+          users={allProfiles}
+          emailMap={emailMap}
+          currentUserId={user.id}
+        />
+
+        <p className="text-xs text-[var(--text-muted)] text-center">
+          Schema: <code className="font-mono">{process.env.SUPABASE_DB_SCHEMA ?? "ladekompass-dev"}</code>
+        </p>
       </div>
     </main>
   );
 }
+
