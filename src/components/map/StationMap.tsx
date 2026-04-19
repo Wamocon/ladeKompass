@@ -50,7 +50,7 @@ const TILE_URLS: Record<MapStyle, { url: string; attribution: string }> = {
 
 /** Creates a Leaflet divIcon using the EV map pin SVG */
 function createStationMarker(type: PinType, powerKw: number) {
-  const size = powerKw >= 150 ? 36 : powerKw >= 22 ? 32 : 28;
+  const size = powerKw >= 150 ? 72 : powerKw >= 22 ? 64 : 56;
   const height = Math.round(size * 46 / 36);
   return L.divIcon({
     className: "",

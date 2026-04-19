@@ -5,8 +5,8 @@ import { Metadata } from "next";
 import { NewsFeed } from "@/components/dashboard/NewsFeed";
 import { NearbyFeed } from "@/components/dashboard/NearbyFeed";
 import { PlanGate } from "@/components/ui/PlanGate";
-import { Navigation, MapPin, Car } from "lucide-react";
-import Link from "next/link";
+import { DashboardExpandableCard } from "@/components/dashboard/DashboardExpandableCard";
+import { MapPin, Car, Route } from "lucide-react";
 
 interface Props {
   params: Promise<{ locale: string }>;
@@ -77,18 +77,46 @@ export default async function DashboardPage({ params }: Props) {
       icon: <MapPin size={18} className="text-[var(--primary)]" />,
       label: t("quick_map", { fallback: "Karte" }),
       desc: t("quick_map_desc", { fallback: "Ladestationen in der Nähe finden" }),
+      navigateLabel: t("quick_map", { fallback: "Zur Karte" }),
+      details: (
+        <ul className="space-y-1 text-xs">
+          <li>• Echtzeitkarte aller Ladesäulen in Deutschland</li>
+          <li>• Filtere nach Ladeleistung (AC / DC / HPC)</li>
+          <li>• Steckertyp-Filter (Type 2, CCS, CHAdeMO, Tesla)</li>
+          <li>• Nur verfügbare / 24/7 geöffnete Stationen anzeigen</li>
+          <li>• Exportiere Stationen als CSV</li>
+        </ul>
+      ),
     },
     {
       href: `/${locale}/route`,
-      icon: <Navigation size={18} className="text-[var(--primary)]" />,
+      icon: <Route size={18} className="text-[var(--primary)]" />,
       label: t("quick_route", { fallback: "Routenplaner" }),
       desc: t("quick_route_desc", { fallback: "Langstrecke mit Ladestopps planen" }),
+      navigateLabel: t("quick_route", { fallback: "Route planen" }),
+      details: (
+        <ul className="space-y-1 text-xs">
+          <li>• Automatische Berechnung optimaler Ladestopps</li>
+          <li>• Berücksichtigt Fahrzeugreichweite &amp; aktuellen Akkustand</li>
+          <li>• Schritt-für-Schritt Navigation mit GPS</li>
+          <li>• Spurempfehlung an Kreuzungen</li>
+        </ul>
+      ),
     },
     {
       href: `/${locale}/profile`,
       icon: <Car size={18} className="text-[var(--primary)]" />,
       label: t("quick_vehicles", { fallback: "Fahrzeuge" }),
       desc: t("quick_vehicles_desc", { fallback: "Fahrzeugprofile verwalten" }),
+      navigateLabel: t("quick_vehicles", { fallback: "Zum Profil" }),
+      details: (
+        <ul className="space-y-1 text-xs">
+          <li>• Fahrzeugprofile anlegen &amp; bearbeiten</li>
+          <li>• Reichweite &amp; Batterie-Kapazität eintragen</li>
+          <li>• Profil wird für die Routenplanung genutzt</li>
+          <li>• Kontodaten &amp; Abo-Einstellungen verwalten</li>
+        </ul>
+      ),
     },
   ];
 
@@ -110,21 +138,15 @@ export default async function DashboardPage({ params }: Props) {
         {/* Quick actions */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {quickLinks.map((link) => (
-            <Link
+            <DashboardExpandableCard
               key={link.href}
               href={link.href}
-              className="group flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 hover:border-[var(--primary)] hover:bg-[var(--primary-light-soft)] transition-colors"
-            >
-              <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--primary-light-soft)] flex items-center justify-center group-hover:scale-110 transition-transform">
-                {link.icon}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[var(--text-base)]">
-                  {link.label}
-                </p>
-                <p className="text-xs text-[var(--text-muted)]">{link.desc}</p>
-              </div>
-            </Link>
+              icon={link.icon}
+              label={link.label}
+              desc={link.desc}
+              details={link.details}
+              navigateLabel={link.navigateLabel}
+            />
           ))}
         </div>
 

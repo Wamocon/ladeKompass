@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Map, Navigation, LayoutDashboard, Car, Settings } from "lucide-react";
+import { Map, Navigation, LayoutDashboard, User, Settings, ShieldCheck } from "lucide-react";
 
 interface BottomNavProps {
   isAuthenticated?: boolean;
+  userRole?: "driver" | "fleet_manager" | "admin" | "super_admin";
 }
 
-export function BottomNav({ isAuthenticated = false }: BottomNavProps) {
+export function BottomNav({ isAuthenticated = false, userRole }: BottomNavProps) {
   const t = useTranslations("nav");
   const locale = useLocale();
   const pathname = usePathname();
+
+  const isAdmin = userRole === "admin" || userRole === "super_admin";
 
   const tabs = [
     { href: `/${locale}/map`, label: t("map"), icon: Map },
@@ -20,8 +23,11 @@ export function BottomNav({ isAuthenticated = false }: BottomNavProps) {
     ...(isAuthenticated
       ? [
           { href: `/${locale}/dashboard`, label: t("dashboard"), icon: LayoutDashboard },
-          { href: `/${locale}/profile`, label: t("vehicles"), icon: Car },
-          { href: `/${locale}/settings`, label: t("settings"), icon: Settings },
+          { href: `/${locale}/profile`, label: t("profile"), icon: User },
+          ...(isAdmin
+            ? [{ href: `/${locale}/admin`, label: t("admin"), icon: ShieldCheck }]
+            : [{ href: `/${locale}/settings`, label: t("settings"), icon: Settings }]
+          ),
         ]
       : []),
   ];

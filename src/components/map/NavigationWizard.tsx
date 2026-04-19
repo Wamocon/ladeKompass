@@ -2,10 +2,9 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
-  Navigation, Loader2, X, ArrowRight, ArrowLeft, ArrowUp,
-  RotateCcw, CornerUpLeft, CornerUpRight, MapPin, Search,
+  Navigation, Loader2, X, MapPin, Search,
   ChevronDown, ChevronUp, Minus, Play, Square, AlertCircle,
-  CheckCircle, BatteryCharging, Zap,
+  BatteryCharging, Zap, CheckCircle, LocateFixed, Clock,
 } from "lucide-react";
 import {
   planChargingStops,
@@ -90,19 +89,128 @@ function distanceM(lat1: number, lng1: number, lat2: number, lng2: number): numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * SVG-based maneuver arrow — renders clean navigation direction arrows
+ * similar to professional navigation apps (no PowerPoint-style icons).
+ */
 function ManeuverIcon({ type, modifier, size = 20 }: { type: string; modifier?: string; size?: number }) {
-  if (type === "turn") {
-    if (modifier === "left" || modifier === "sharp left" || modifier === "slight left")
-      return <ArrowLeft size={size} className="text-blue-400 shrink-0" />;
-    if (modifier === "right" || modifier === "sharp right" || modifier === "slight right")
-      return <ArrowRight size={size} className="text-blue-400 shrink-0" />;
+  const s = size;
+  const sw = Math.max(2, Math.round(s * 0.16));  // stroke-width scaled to size
+  const color = "currentColor";
+
+  if (type === "arrive") {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <circle cx="50" cy="50" r="28" stroke={color} strokeWidth={sw * 1.4}/>
+        <circle cx="50" cy="50" r="12" fill={color}/>
+      </svg>
+    );
   }
-  if (type === "roundabout" || type === "rotary")
-    return <RotateCcw size={size} className="text-yellow-400 shrink-0" />;
-  if (type === "on ramp") return <CornerUpRight size={size} className="text-green-400 shrink-0" />;
-  if (type === "off ramp") return <CornerUpLeft size={size} className="text-orange-400 shrink-0" />;
-  if (type === "arrive") return <CheckCircle size={size} className="text-green-400 shrink-0" />;
-  return <ArrowUp size={size} className="text-blue-400 shrink-0" />;
+
+  if (type === "roundabout" || type === "rotary") {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-yellow-400 shrink-0" fill="none">
+        <path d="M50 18 A32 32 0 1 0 82 50" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round"/>
+        <polygon points="82,34 97,50 82,66" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (type === "on ramp") {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M50 82 L50 38 Q50 22 65 22 L76 22" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="76,12 92,22 76,32" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (type === "off ramp") {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-orange-400 shrink-0" fill="none">
+        <path d="M50 18 L50 62 Q50 78 35 78 L24 78" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="24,68 8,78 24,88" fill={color}/>
+      </svg>
+    );
+  }
+
+  const m = modifier ?? "";
+  const isLeft  = m.includes("left");
+  const isRight = m.includes("right");
+  const isSharp = m.includes("sharp");
+  const isSlight = m.includes("slight");
+  const isUturn = m === "uturn";
+
+  if (isUturn) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M62 82 L62 44 Q62 18 38 18 Q14 18 14 44 L14 56" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round"/>
+        <polygon points="47,82 62,66 77,82" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (isLeft && isSharp) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M58 82 L58 46 L24 46" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="24,30 10,46 24,62" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (isLeft) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M58 82 L58 52 Q58 36 44 36 L28 36" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="12,36 28,22 28,50" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (isRight && isSharp) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M42 82 L42 46 L76 46" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="76,30 90,46 76,62" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (isRight) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M42 82 L42 52 Q42 36 56 36 L72 36" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="88,36 72,22 72,50" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (isSlight && isLeft) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M54 82 L54 52 Q54 34 36 24" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="20,18 40,16 34,34" fill={color}/>
+      </svg>
+    );
+  }
+
+  if (isSlight && isRight) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+        <path d="M46 82 L46 52 Q46 34 64 24" stroke={color} strokeWidth={sw * 1.2} strokeLinecap="round" strokeLinejoin="round"/>
+        <polygon points="80,18 60,16 66,34" fill={color}/>
+      </svg>
+    );
+  }
+
+  // Straight ahead (default)
+  return (
+    <svg width={s} height={s} viewBox="0 0 100 100" className="text-green-400 shrink-0" fill="none">
+      <line x1="50" y1="76" x2="50" y2="32" stroke={color} strokeWidth={sw * 1.4} strokeLinecap="round"/>
+      <polygon points="28,46 50,18 72,46" fill={color}/>
+    </svg>
+  );
 }
 
 function modifierLabel(m?: string): string {
@@ -132,14 +240,11 @@ function LaneIndicator({ lanes }: { lanes: Array<{ indications: string[]; valid:
                 : "bg-white/5 border-white/15 opacity-40"
             }`}
           >
-            {main === "left" || main === "sharp left" || main === "slight left"
-              ? <ArrowLeft size={10} className={lane.valid ? "text-white" : "text-white/40"} />
-              : main === "right" || main === "sharp right" || main === "slight right"
-              ? <ArrowRight size={10} className={lane.valid ? "text-white" : "text-white/40"} />
-              : main === "uturn"
-              ? <RotateCcw size={10} className={lane.valid ? "text-white" : "text-white/40"} />
-              : <ArrowUp size={10} className={lane.valid ? "text-white" : "text-white/40"} />
-            }
+            <ManeuverIcon
+              type="turn"
+              modifier={main === "uturn" ? "uturn" : main}
+              size={10}
+            />
           </div>
         );
       })}
@@ -204,7 +309,7 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 focus-within:border-blue-400 transition-colors">
+        <div className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 focus-within:border-green-400 transition-colors">
         <span className="shrink-0">{icon}</span>
         {searching
           ? <Loader2 size={11} className="shrink-0 text-zinc-400 animate-spin" />
@@ -222,6 +327,40 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
             <X size={11} />
           </button>
         )}
+        <button
+          type="button"
+          title="Aktuellen Standort verwenden"
+          onClick={() => {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                const { latitude: lat, longitude: lon } = pos.coords;
+                try {
+                  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+                  const data: unknown = await res.json();
+                  // Validate the response: display_name must be a non-empty string.
+                  // Sanitise by stripping HTML-significant characters and capping length
+                  // to prevent any server-side tampering from affecting the UI.
+                  const raw = (data as Record<string, unknown>)?.display_name;
+                  const label =
+                    typeof raw === "string" && raw.length > 0
+                      ? raw.split(",").slice(0, 2).join(",").replace(/[<>'"&]/g, "").trim().slice(0, 200)
+                      : "Mein Standort";
+                  setQuery(label);
+                  onChange(label, lat, lon);
+                } catch {
+                  setQuery("Mein Standort");
+                  onChange("Mein Standort", lat, lon);
+                }
+              },
+              () => {},
+              { timeout: 6000 },
+            );
+          }}
+          className="shrink-0 text-green-500 hover:text-green-400 transition-colors"
+        >
+          <LocateFixed size={13} />
+        </button>
       </div>
       {open && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 z-[900] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
@@ -248,6 +387,13 @@ type PanelState = "expanded" | "collapsed" | "hidden";
 
 export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, onNavStop, onChargingStops, onNavActiveChange }: NavigationWizardProps) {
   const [panelState, setPanelState] = useState<PanelState>("expanded");
+
+  // On mobile, start collapsed to avoid covering the map
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setPanelState("hidden");
+    }
+  }, []);
   const [from, setFrom] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [to, setTo] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [loading, setLoading] = useState(false);
@@ -437,13 +583,13 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
       <>
         {/* Mini status pill — top-right */}
         <div className="absolute top-3 right-3 z-[700]">
-          <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl px-3.5 py-2.5 shadow-2xl border border-blue-500/30">
+          <div className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-2xl px-3.5 py-2.5 shadow-2xl border border-green-500/30">
             <Navigation size={14} className="shrink-0" />
             {remainingDist !== null && (
               <span className="text-sm font-black">{fmtDist(remainingDist)}</span>
             )}
             {remainingTime !== null && (
-              <span className="text-xs text-blue-200 font-medium">· {fmtTime(remainingTime)}</span>
+              <span className="text-xs text-green-200 font-medium">· {fmtTime(remainingTime)}</span>
             )}
             <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full font-bold animate-pulse ml-1">LIVE</span>
             <button
@@ -460,11 +606,11 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
         {/* Bottom-center Google Maps-style HUD */}
         {currentStep && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[700]" style={{ width: "min(90vw, 520px)" }}>
-            <div className="bg-[#0f172a]/96 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden border border-white/10">
+            <div className="bg-[#0a1a0e]/97 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden border border-green-900/30">
 
               {/* Main maneuver row */}
               <div className="flex items-center gap-4 px-5 py-4">
-                <div className="bg-blue-600 rounded-2xl p-4 shrink-0 shadow-lg">
+                <div className="bg-green-600 rounded-2xl p-4 shrink-0 shadow-lg">
                   <ManeuverIcon type={currentStep.maneuver.type} modifier={currentStep.maneuver.modifier} size={42} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -472,7 +618,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                     {distToNext !== null ? fmtDist(distToNext) : fmtDist(currentStep.distance)}
                   </p>
                   {currentStep.maneuver.modifier && (
-                    <p className="text-sm font-bold text-blue-400 mt-0.5">
+                    <p className="text-sm font-bold text-green-400 mt-0.5">
                       {modifierLabel(currentStep.maneuver.modifier)}
                     </p>
                   )}
@@ -489,14 +635,14 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                 const lanes = currentStep.intersections?.[0]?.lanes;
                 return lanes && lanes.length > 0 ? (
                   <div className="px-5 pb-3 -mt-1">
-                    <p className="text-[9px] text-blue-400/70 uppercase tracking-wider mb-1.5 font-bold">Spurempfehlung</p>
+                    <p className="text-[9px] text-green-400/70 uppercase tracking-wider mb-1.5 font-bold">Spurempfehlung</p>
                     <LaneIndicator lanes={lanes} />
                   </div>
                 ) : null;
               })()}
 
               {/* Status row */}
-              <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.04] border-t border-white/[0.06]">
+              <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.03] border-t border-green-900/30">
                 <MapPin size={13} className="text-zinc-500 shrink-0" />
                 <span className="text-sm font-semibold text-zinc-200">
                   {remainingDist !== null ? `Noch ${fmtDist(remainingDist)}` : "\u2014"}
@@ -504,6 +650,17 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                 {remainingTime !== null && (
                   <span className="text-sm text-zinc-400">{"\u00b7"} ca. {fmtTime(remainingTime)}</span>
                 )}
+                {remainingTime !== null && (() => {
+                  const arrival = new Date(Date.now() + remainingTime * 1000);
+                  const hh = String(arrival.getHours()).padStart(2, "0");
+                  const mm = String(arrival.getMinutes()).padStart(2, "0");
+                  return (
+                    <span className="flex items-center gap-1 text-xs text-green-300 font-semibold ml-auto">
+                      <Clock size={11} className="shrink-0" />
+                      {hh}:{mm}
+                    </span>
+                  );
+                })()}
                 {chargingPlan && chargingPlan.stops.length > 0 && remainingDist !== null && route && (() => {
                   const driven = route.distance - remainingDist;
                   const nextStop = chargingPlan.stops.find((s) => s.distanceFromStartM > driven);
@@ -534,8 +691,8 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
 
   if (panelState === "hidden") {
     return (
-      <div className="absolute bottom-28 md:bottom-24 right-4 z-[700]">
-        <button type="button" onClick={() => setPanelState("expanded")} className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3.5 shadow-xl transition-colors" title="Navigation öffnen">
+      <div className="absolute bottom-28 md:bottom-24 right-4 z-[630]">
+        <button type="button" onClick={() => setPanelState("expanded")} className="bg-green-600 hover:bg-green-700 text-white rounded-full p-3.5 shadow-xl transition-colors" title="Navigation öffnen">
           <Navigation size={20} />
         </button>
       </div>
@@ -547,7 +704,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
       <div className="flex flex-col bg-white/97 dark:bg-zinc-900/97 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl">
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-gradient-to-r from-green-600 to-green-700 rounded-t-2xl">
           <Navigation size={15} className="text-white shrink-0" />
           <span className="flex-1 text-sm font-bold text-white tracking-wide">
             {isNavActive ? "Navigation läuft…" : "Navigation"}
@@ -565,21 +722,21 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
 
         {/* Live nav maneuver banner */}
         {isNavActive && panelState === "expanded" && currentStep && (
-          <div className="bg-blue-900 dark:bg-blue-950 px-4 py-3 border-b border-blue-800">
+          <div className="bg-green-900 dark:bg-green-950 px-4 py-3 border-b border-green-800">
             <div className="flex items-center gap-3">
-              <div className="bg-blue-700 rounded-xl p-2.5 shrink-0">
+              <div className="bg-green-700 rounded-xl p-2.5 shrink-0">
                 <ManeuverIcon type={currentStep.maneuver.type} modifier={currentStep.maneuver.modifier} size={28} />
               </div>
               <div className="flex-1 min-w-0">
                 {distToNext !== null && (
                   <p className="text-2xl font-black text-white leading-none">{fmtDist(distToNext)}</p>
                 )}
-                <p className="text-sm text-blue-200 font-semibold truncate mt-0.5">
+                <p className="text-sm text-green-200 font-semibold truncate mt-0.5">
                   {nextStep ? `Dann: ${nextStep.name || nextStep.maneuver.type}` : currentStep.name || "Ziel erreicht"}
                 </p>
               </div>
               {currentStep.maneuver.modifier && (
-                <p className="text-xs text-blue-300 font-bold shrink-0">{modifierLabel(currentStep.maneuver.modifier)}</p>
+                <p className="text-xs text-green-300 font-bold shrink-0">{modifierLabel(currentStep.maneuver.modifier)}</p>
               )}
             </div>
             {/* Lane indicator — shown when intersection has lane data */}
@@ -587,13 +744,13 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
               const lanes = currentStep.intersections?.[0]?.lanes;
               return lanes && lanes.length > 0 ? (
                 <div className="mt-2 px-1">
-                  <p className="text-[9px] text-blue-400 uppercase tracking-wider mb-1 font-bold">Spurempfehlung</p>
+                  <p className="text-[9px] text-green-400 uppercase tracking-wider mb-1 font-bold">Spurempfehlung</p>
                   <LaneIndicator lanes={lanes} />
                 </div>
               ) : null;
             })()}
             {remainingDist !== null && (
-              <div className="mt-2 flex items-center gap-3 text-xs text-blue-300">
+              <div className="mt-2 flex items-center gap-3 text-xs text-green-300">
                 <span>Noch {fmtDist(remainingDist)}</span>
                 {remainingTime !== null && <span>· ca. {fmtTime(remainingTime)}</span>}
                 <button type="button" onClick={stopNavigation} className="ml-auto flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg font-bold transition-colors">
@@ -627,7 +784,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                 <div className="flex justify-center py-0.5"><div className="w-px h-3 bg-zinc-200 dark:bg-zinc-700" /></div>
                 <GeoInput placeholder="Zieladresse…" icon={<MapPin size={13} className="text-red-500" />} value={to.label} onChange={(l, lat, lng) => setTo({ label: l, lat, lng })} />
                 <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={handleCalculate} disabled={!canCalculate} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                  <button type="button" onClick={() => { handleCalculate(); }} disabled={!canCalculate} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
                     {loading ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
                     {loading ? "Wird berechnet…" : "Route berechnen"}
                   </button>
@@ -648,10 +805,10 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
             {/* Route summary + start nav */}
             {route && !isNavActive && (
               <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 space-y-2">
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl px-3 py-2 flex items-center gap-3">
-                  <span className="text-sm font-bold text-blue-700 dark:text-blue-300">{fmtDist(route.distance)}</span>
-                  <span className="text-blue-400">·</span>
-                  <span className="text-sm text-blue-600 dark:text-blue-400">{fmtTime(route.duration)}</span>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2 flex items-center gap-3">
+                  <span className="text-sm font-bold text-green-700 dark:text-green-300">{fmtDist(route.distance)}</span>
+                  <span className="text-green-400">·</span>
+                  <span className="text-sm text-green-600 dark:text-green-400">{fmtTime(route.duration)}</span>
                   {chargingPlan && chargingPlan.stops.length > 0 && (
                     <span className="ml-auto text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold">
                       +{chargingPlan.totalChargingMinutes} min Laden
@@ -663,7 +820,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                     </span>
                   )}
                   {!chargingPlan && (
-                    <span className="ml-auto text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-bold">Karte ✓</span>
+                    <span className="ml-auto text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full font-bold">Karte ✓</span>
                   )}
                 </div>
                 <button type="button" onClick={startNavigation} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm transition-colors">
@@ -753,9 +910,9 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
               <div className="overflow-y-auto max-h-56 p-2 space-y-0.5">
                 <p className="text-[10px] uppercase tracking-widest text-zinc-400 px-2 pb-1 font-semibold">Abbiegehinweise</p>
                 {route.steps.map((step, i) => (
-                  <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${isNavActive && i === currentStepIdx ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}>
+                  <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${isNavActive && i === currentStepIdx ? "bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}>
                     <ManeuverIcon type={step.maneuver.type} modifier={step.maneuver.modifier} size={12} />
-                    <span className={`flex-1 text-xs truncate ${isNavActive && i === currentStepIdx ? "text-blue-700 dark:text-blue-300 font-semibold" : "text-zinc-700 dark:text-zinc-200"}`}>
+                    <span className={`flex-1 text-xs truncate ${isNavActive && i === currentStepIdx ? "text-green-700 dark:text-green-300 font-semibold" : "text-zinc-700 dark:text-zinc-200"}`}>
                       {step.name || step.maneuver.type}
                     </span>
                     {step.distance > 0 && <span className="text-[10px] text-zinc-400 shrink-0">{fmtDist(step.distance)}</span>}
@@ -776,10 +933,10 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
 
         {/* Collapsed summary */}
         {panelState === "collapsed" && route && (
-          <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 flex items-center gap-2">
-            <span className="text-xs font-bold text-blue-700 dark:text-blue-300">{fmtDist(route.distance)}</span>
-            <span className="text-blue-400 text-xs">·</span>
-            <span className="text-xs text-blue-600 dark:text-blue-400">{fmtTime(route.duration)}</span>
+          <div className="px-3 py-2 bg-green-50 dark:bg-green-900/20 flex items-center gap-2">
+            <span className="text-xs font-bold text-green-700 dark:text-green-300">{fmtDist(route.distance)}</span>
+            <span className="text-green-400 text-xs">·</span>
+            <span className="text-xs text-green-600 dark:text-green-400">{fmtTime(route.duration)}</span>
             {isNavActive && <span className="ml-auto text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">LIVE</span>}
           </div>
         )}
