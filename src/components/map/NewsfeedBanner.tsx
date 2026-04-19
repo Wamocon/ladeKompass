@@ -35,6 +35,22 @@ function parsePrice(text?: string | null): number | null {
   return null;
 }
 
+/**
+ * Returns the URL only when it uses http: or https: protocol.
+ * Rejects javascript:, data:, and other potentially harmful URIs.
+ * Falls back to the provided fallback string.
+ */
+function safeExternalUrl(url: string | null | undefined, fallback: string): string {
+  if (!url) return fallback;
+  try {
+    const { protocol } = new URL(url);
+    if (protocol === "https:" || protocol === "http:") return url;
+  } catch {
+    // malformed URL — fall through to fallback
+  }
+  return fallback;
+}
+
 function StatusBadge({ station }: { station: OCMStation }) {
   const isOp = station.StatusType?.IsOperational;
   const hasStatus = !!station.StatusType;
@@ -106,7 +122,10 @@ function StationCard({ station, distKm, price, maxKw }: { station: OCMStation; d
           </span>
         ) : (
           <a
-            href={station.OperatorInfo?.WebsiteURL ?? `https://www.goingelectric.de/stromtankstellen/?q=${encodeURIComponent(station.AddressInfo.Title)}`}
+            href={safeExternalUrl(
+              station.OperatorInfo?.WebsiteURL,
+              `https://www.goingelectric.de/stromtankstellen/?q=${encodeURIComponent(station.AddressInfo.Title)}`,
+            )}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-0.5 text-[9px] font-semibold text-[var(--primary,#16a34a)] hover:underline ml-auto shrink-0"
