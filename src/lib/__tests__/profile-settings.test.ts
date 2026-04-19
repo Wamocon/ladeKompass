@@ -230,7 +230,7 @@ describe("MapPrefs – Dual-Persistenz bei update()", () => {
   });
 
   it("Update preserviert vorherige Werte (kein Überschreiben)", () => {
-    let prefs = simulateMapPrefsUpdate("mapStyle", "dark", {}, storage, supabaseCalls);
+    const prefs = simulateMapPrefsUpdate("mapStyle", "dark", {}, storage, supabaseCalls);
     simulateMapPrefsUpdate("show3D", true, prefs, storage, supabaseCalls);
     const stored = JSON.parse(storage.get("lk-map-prefs") ?? "{}");
     expect(stored.mapStyle).toBe("dark"); // bleibt erhalten
