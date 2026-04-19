@@ -1,6 +1,6 @@
 # Produkthandbuch: LadeKompass – Alle Ladesäulen, ein Überblick
 
-> **Version 1.2** | Stand: April 2026 | WAMOCON
+> **Version 1.3** | Stand: April 2026 | WAMOCON
 
 ---
 
@@ -89,10 +89,12 @@ LadeKompass ist in drei Tarifen verfügbar.
 ### 3.2 Route mit Lade-Stopps planen
 
 1. Navigation-Icon oben rechts auf der Karte klicken → NavigationWizard öffnet sich
-2. **Startadresse** eingeben (Autocomplete mit Nominatim)  
+2. **Fahrzeugtyp wählen** (oberhalb der Adresseingaben): 🚗 E-Auto · 🛵 E-Roller · 🛴 E-Scooter · 🚶 Zu Fuß  
+   → Bestimmt das OSRM-Routing-Profil (Auto/Roller = Fahrbahn, E-Scooter = Radweg, Zu Fuß = Fußweg)
+3. **Startadresse** eingeben (Autocomplete mit Nominatim)  
    → Alternativ: **Grünes `LocateFixed`-Icon** rechts im Eingabefeld antippen → GPS-Standort wird automatisch als Adresse übernommen
-3. **Zieladresse** eingeben (ebenfalls mit Geolocation-Schnellzugriff verfügbar)
-4. **Route berechnen** klicken → Route wird angezeigt
+4. **Zieladresse** eingeben (ebenfalls mit Geolocation-Schnellzugriff verfügbar)
+5. **Route berechnen** klicken → Route wird angezeigt
 5. Schieberegler für **Reichweite** und **Akku-Füllstand** einstellen
 6. App berechnet automatisch notwendige Lade-Stopps auf der Route
 7. **Navigation starten (GPS)** → Turn-by-Turn Navigation mit Spur-Anzeige  
@@ -140,14 +142,29 @@ LadeKompass ist in drei Tarifen verfügbar.
 
 1. Auf der Karte auf das **Navigations-Icon** (FAB, unten rechts) tippen
 2. NavigationWizard öffnet sich oben
-3. Start- und Zieladresse eingeben — oder **`LocateFixed`-Button** im Eingabefeld nutzen, um den aktuellen GPS-Standort sofort zu übernehmen
-4. Route berechnen und Navigation starten
-5. Während der Navigation: HUD zeigt nächste Abbiegung + Distanz + **Ankunftszeit (HH:MM)**
+3. **Fahrzeugtyp auswählen**: 🚗 E-Auto · 🛵 E-Roller · 🛴 E-Scooter · 🚶 Zu Fuß
+4. Start- und Zieladresse eingeben — oder **`LocateFixed`-Button** im Eingabefeld nutzen, um den aktuellen GPS-Standort sofort zu übernehmen
+5. Route berechnen und Navigation starten
+6. Während der Navigation: HUD zeigt nächste Abbiegung + Distanz + **Ankunftszeit (HH:MM)**
+7. Standort-Marker zeigt **Fahrtrichtungspfeil** (GPS-Heading), wenn das Gerät eine Richtungsangabe liefert
 
 ### 4.3 Kartenstil wechseln (Desktop)
 
 1. Im linken Panel auf **Kartenstil** klicken
 2. Zwischen Hell, Dunkel, Farbig und Standard wählen
+3. Die gewählte Einstellung wird automatisch in `localStorage` gespeichert und beim nächsten Besuch wiederhergestellt
+
+### 4.8 Karten-Einstellungen in den Profil-Einstellungen
+
+1. Unter **Einstellungen** (`/settings`) den Abschnitt **Karten-Einstellungen** öffnen
+2. Folgende Einstellungen können dauerhaft gespeichert werden:
+   - **Kartenstil**: Hell / Dunkel / Farbig / Standard
+   - **Standard-Ladeleistung**: Alle / AC / DC / HPC
+   - **Standard-Steckertyp**: Alle / Typ 2 / CCS / CHAdeMO / Tesla
+   - **Live-Feed anzeigen**: Neuigkeiten-Banner ein/aus
+   - **Heatmap anzeigen**: Dichtekarte beim Laden aktivieren
+   - **3D-Gebäude**: Optionale 3D-Ansicht beim Laden aktivieren
+3. Alle Einstellungen werden im Browser (`localStorage`, Schlüssel `lk-map-prefs`) gespeichert und sofort beim nächsten Kartenaufruf angewendet
 
 ### 4.4 Theme wechseln (Desktop & Mobile)
 
@@ -233,7 +250,8 @@ Gesperrte Features zeigen eine `PlanGate`-Komponente mit Upgrade-CTA:
 | Echtzeit-Status | Grün/Rot/Grau-Marker je nach Betriebsstatus |
 | Heatmap | Dichtekarte aller Ladestationen; beim Aktivieren erscheint ein Erklärungstext: kalt = wenige Stationen, warm/rot = hohe Dichte — ideal zur Erkennung von Versorgungslücken |
 | 3D-Gebäude | Optionale 3D-Ansicht (MapLibre) |
-| Nutzerposition | GPS-Ortung mit blauem Puls-Marker |
+| Nutzerposition | GPS-Ortung mit blauem Puls-Marker oder Richtungspfeil (rotierender Pfeil bei verfügbarem GPS-Heading) |
+| Scharfe Icons | EV-Pins werden in 4× Auflösung gerendert (144×184 px physisch, `pixelRatio: 4`) für gestochen scharfe Darstellung auf HiDPI-Displays |
 | Route-Layer | Berechnete Route als blaue Linie |
 | Lade-Stopps | Orange Marker auf der Route |
 | Kartenstile | Hell, Dunkel, Farbig, Standard |
@@ -254,11 +272,21 @@ Jede Ladesäule wird als farbiger Teardrop-Pin dargestellt – abhängig von der
 
 | Schritt | Beschreibung |
 | :--- | :--- |
+| 0. Fahrzeugtyp | Auswahl via 4-Button-Picker: 🚗 E-Auto (driving) · 🛵 E-Roller (driving) · 🛴 E-Scooter (cycling) · 🚶 Zu Fuß (foot) — bestimmt das OSRM-Profil |
 | 1. Eingabe | Start- und Zieladresse via Nominatim-Autocomplete + `LocateFixed`-Button für GPS-Schnellzugriff |
-| 2. Berechnung | OSRM-Routing (open source), vollständige Abbiegeliste |
+| 2. Berechnung | OSRM-Routing (open source), vollständige Abbiegeliste; Profil variiert je Fahrzeugtyp |
 | 3. Ladeplanung | Automatische Lade-Stopp-Berechnung nach Reichweite/Akku |
 | 4. Navigation | GPS-Tracking, Schritt-für-Schritt-Anweisung, Spur-Empfehlung |
 | 5. HUD | Vollbild-HUD mit Manöver-Icon, Distanz, verbleibender Zeit **und Ankunftszeit (HH:MM)** |
+
+#### 5.5.2 Fahrzeugtypen und OSRM-Profile
+
+| Fahrzeugtyp | Icon | OSRM-Profil | Streckenführung |
+| :--- | :--- | :--- | :--- |
+| E-Auto | 🚗 | `driving` | Fahrbahn, Autobahn erlaubt |
+| E-Roller | 🛵 | `driving` | Fahrbahn (< 45 km/h wird serverseitig nicht differenziert) |
+| E-Scooter | 🛴 | `cycling` | Radwege, Fahrbahn, kein Fußgängerweg |
+| Zu Fuß | 🚶 | `foot` | Fußgängerwege, Gehwege, Parks |
 
 #### 5.5.1 HUD-Elemente während der Navigation
 
@@ -293,7 +321,8 @@ Jede Station ist als klickbare Zeile dargestellt. Ein Tipp/Klick öffnet eine De
 - **„Navigation starten"-Button** → holt GPS-Position, speichert Navigationsziel in `localStorage` und öffnet die Karte mit dem NavigationWizard
 
 **Radius-Auswahl:** 10 km / 25 km / 50 km / 100 km  
-**Aktualisierung:** Manuell via Refresh-Button oder automatisch bei Radius-Änderung
+**Aktualisierung:** Manuell via Refresh-Button oder automatisch bei Radius-Änderung  
+**Radius-Filterlogik:** Die OCM-API wird mit einem 50 % größeren Radius abgefragt (`fetchRadius = selectedRadius × 1.5`, max. 150 km), danach werden die Ergebnisse client-seitig per Haversine-Formel auf den exakten gewählten Radius gefiltert. Dadurch wird verhindert, dass ein OCM-Ergebnislimit (200 Einträge) den sichtbaren Bereich künstlich beschneidet.
 
 ---
 
