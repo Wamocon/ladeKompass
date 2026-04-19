@@ -146,8 +146,7 @@ function ExpandableStationRow({
               fromCoord: [pos.coords.latitude, pos.coords.longitude],
               toCoord: [s.lat, s.lng],
             };
-            localStorage.setItem("lk_nav_preset", JSON.stringify(preset));
-            router.push(dest);
+            router.push(`${dest}?preset=${encodeURIComponent(JSON.stringify(preset))}`);
           },
           () => {
             const preset = {
@@ -156,8 +155,7 @@ function ExpandableStationRow({
               fromCoord: [s.lat + 0.01, s.lng + 0.01],
               toCoord: [s.lat, s.lng],
             };
-            localStorage.setItem("lk_nav_preset", JSON.stringify(preset));
-            router.push(dest);
+            router.push(`${dest}?preset=${encodeURIComponent(JSON.stringify(preset))}`);
           },
           { timeout: 5000 },
         );
