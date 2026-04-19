@@ -235,3 +235,57 @@ describe("parseOsrmResponse", () => {
     expect(result!.steps).toHaveLength(0);
   });
 });
+
+// ─── Arrival time formatting (same logic as HUD status row) ─────────────────
+
+/**
+ * Computes the expected arrival time string "HH:MM" given a fixed base
+ * timestamp and remainingTime in seconds.
+ */
+function formatArrivalTime(nowMs: number, remainingSeconds: number): string {
+  const arrival = new Date(nowMs + remainingSeconds * 1000);
+  const hh = String(arrival.getHours()).padStart(2, "0");
+  const mm = String(arrival.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+describe("formatArrivalTime", () => {
+  it("formats arrival time as HH:MM with zero-padding", () => {
+    // 2026-01-01 08:00:00 UTC+0 = 28800000 ms since epoch
+    // remainingTime: 300 s (5 min) → arrival 08:05
+    const base = new Date("2026-01-01T08:00:00Z").getTime();
+    const result = formatArrivalTime(base, 300);
+    // result depends on local timezone – just assert HH:MM shape
+    expect(result).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it("returns exactly 5 characters (HH:MM)", () => {
+    const base = Date.now();
+    expect(formatArrivalTime(base, 0)).toHaveLength(5);
+    expect(formatArrivalTime(base, 3600)).toHaveLength(5);
+    expect(formatArrivalTime(base, 7200)).toHaveLength(5);
+  });
+
+  it("adds remainingTime to now (seconds → milliseconds)", () => {
+    // Use a fixed timestamp for deterministic result
+    // 2026-04-19 12:00:00 local — we mock a known minute boundary
+    const base = new Date(2026, 3, 19, 12, 0, 0).getTime(); // local noon
+    const result = formatArrivalTime(base, 0);
+    expect(result).toBe("12:00");
+  });
+
+  it("rolls over midnight correctly", () => {
+    // 23:58 + 3 min = 00:01 next day
+    const base = new Date(2026, 3, 19, 23, 58, 0).getTime();
+    const result = formatArrivalTime(base, 180);
+    expect(result).toBe("00:01");
+  });
+
+  it("handles large remaining times (multi-hour journey)", () => {
+    // 10:00 + 2.5 h = 12:30
+    const base = new Date(2026, 3, 19, 10, 0, 0).getTime();
+    const result = formatArrivalTime(base, 9000); // 2.5 * 3600
+    expect(result).toBe("12:30");
+  });
+});
+

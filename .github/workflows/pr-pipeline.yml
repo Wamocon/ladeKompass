@@ -1,14 +1,15 @@
 # =============================================================================
-# PR Quality Pipeline — TypeCheck · Lint · Build
+# Validation Checks — TypeCheck · Lint · Build
 # =============================================================================
 #
 # Runs on every Pull Request targeting main or develop.
-# Blocks merging if typecheck, lint, or the Next.js build fails.
+# Blocks merging if type-checking, linting, or the Next.js production build
+# fails. Unit tests are handled separately in unit-tests.yml.
 #
 # Does NOT run deployments — see deploy.yml for that.
 # =============================================================================
 
-name: PR Quality Pipeline
+name: Validation Checks
 
 permissions:
   contents: read
@@ -18,7 +19,7 @@ on:
     branches: [main, develop]
 
 jobs:
-  quality:
+  validate:
     name: TypeCheck · Lint · Build
     runs-on: ubuntu-latest
     steps:

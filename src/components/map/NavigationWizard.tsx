@@ -337,8 +337,15 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
                 const { latitude: lat, longitude: lon } = pos.coords;
                 try {
                   const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-                  const data = await res.json();
-                  const label = data?.display_name?.split(",").slice(0, 2).join(",").trim() ?? "Mein Standort";
+                  const data: unknown = await res.json();
+                  // Validate the response: display_name must be a non-empty string.
+                  // Sanitise by stripping HTML-significant characters and capping length
+                  // to prevent any server-side tampering from affecting the UI.
+                  const raw = (data as Record<string, unknown>)?.display_name;
+                  const label =
+                    typeof raw === "string" && raw.length > 0
+                      ? raw.split(",").slice(0, 2).join(",").replace(/[<>'"&]/g, "").trim().slice(0, 200)
+                      : "Mein Standort";
                   setQuery(label);
                   onChange(label, lat, lon);
                 } catch {
@@ -397,7 +404,6 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   const [distToNext, setDistToNext] = useState<number | null>(null);
   const [remainingDist, setRemainingDist] = useState<number | null>(null);
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
-  const [navStartTime, setNavStartTime] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const routeRef = useRef<OsrmRoute | null>(null);
 
@@ -512,7 +518,6 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   function startNavigation() {
     if (!navigator.geolocation) { setError("GPS nicht verfügbar."); return; }
     setIsNavActive(true);
-    setNavStartTime(Date.now());
     onNavActiveChange?.(true);
     setCurrentStepIdx(0);
     watchIdRef.current = navigator.geolocation.watchPosition(

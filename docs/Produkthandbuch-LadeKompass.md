@@ -1,6 +1,6 @@
 # Produkthandbuch: LadeKompass – Alle Ladesäulen, ein Überblick
 
-> **Version 1.1** | Stand: April 2026 | WAMOCON
+> **Version 1.2** | Stand: April 2026 | WAMOCON
 
 ---
 
@@ -89,12 +89,14 @@ LadeKompass ist in drei Tarifen verfügbar.
 ### 3.2 Route mit Lade-Stopps planen
 
 1. Navigation-Icon oben rechts auf der Karte klicken → NavigationWizard öffnet sich
-2. **Startadresse** eingeben (Autocomplete mit Nominatim)
-3. **Zieladresse** eingeben
+2. **Startadresse** eingeben (Autocomplete mit Nominatim)  
+   → Alternativ: **Grünes `LocateFixed`-Icon** rechts im Eingabefeld antippen → GPS-Standort wird automatisch als Adresse übernommen
+3. **Zieladresse** eingeben (ebenfalls mit Geolocation-Schnellzugriff verfügbar)
 4. **Route berechnen** klicken → Route wird angezeigt
 5. Schieberegler für **Reichweite** und **Akku-Füllstand** einstellen
 6. App berechnet automatisch notwendige Lade-Stopps auf der Route
-7. **Navigation starten (GPS)** → Turn-by-Turn Navigation mit Spur-Anzeige
+7. **Navigation starten (GPS)** → Turn-by-Turn Navigation mit Spur-Anzeige  
+   → Im HUD erscheint die **geschätzte Ankunftszeit** (HH:MM) neben der verbleibenden Distanz
 
 ### 3.3 Tarif-Vergleich nutzen (Lite/Pro)
 
@@ -136,11 +138,11 @@ LadeKompass ist in drei Tarifen verfügbar.
 
 ### 4.2 Mobile Nutzung: Navigation starten
 
-1. Auf der Karte auf das **Navigations-Icon** (blauer FAB, unten rechts) tippen
+1. Auf der Karte auf das **Navigations-Icon** (FAB, unten rechts) tippen
 2. NavigationWizard öffnet sich oben
-3. Start- und Zieladresse eingeben
+3. Start- und Zieladresse eingeben — oder **`LocateFixed`-Button** im Eingabefeld nutzen, um den aktuellen GPS-Standort sofort zu übernehmen
 4. Route berechnen und Navigation starten
-5. Während der Navigation: HUD zeigt nächste Abbiegung + Distanz
+5. Während der Navigation: HUD zeigt nächste Abbiegung + Distanz + **Ankunftszeit (HH:MM)**
 
 ### 4.3 Kartenstil wechseln (Desktop)
 
@@ -226,10 +228,10 @@ Gesperrte Features zeigen eine `PlanGate`-Komponente mit Upgrade-CTA:
 
 | Feature | Beschreibung |
 | :--- | :--- |
-| Ladesäulen-Cluster | Gruppierung naher Stationen bei niedrigem Zoom |
+| Ladesäulen-Cluster | Gruppierung naher Stationen bei niedrigem Zoom; Farbe zeigt Größe (grün = klein, amber = mittel, rot = groß); volle Deckkraft für maximale Sichtbarkeit |
 | EV-Pin-Icons | 5 farbige SVG-Teardrop-Pins nach Ladeleistung und Status |
 | Echtzeit-Status | Grün/Rot/Grau-Marker je nach Betriebsstatus |
-| Heatmap | Dichtekarte aller Ladestationen |
+| Heatmap | Dichtekarte aller Ladestationen; beim Aktivieren erscheint ein Erklärungstext: kalt = wenige Stationen, warm/rot = hohe Dichte — ideal zur Erkennung von Versorgungslücken |
 | 3D-Gebäude | Optionale 3D-Ansicht (MapLibre) |
 | Nutzerposition | GPS-Ortung mit blauem Puls-Marker |
 | Route-Layer | Berechnete Route als blaue Linie |
@@ -252,11 +254,46 @@ Jede Ladesäule wird als farbiger Teardrop-Pin dargestellt – abhängig von der
 
 | Schritt | Beschreibung |
 | :--- | :--- |
-| 1. Eingabe | Start- und Zieladresse via Nominatim-Autocomplete |
+| 1. Eingabe | Start- und Zieladresse via Nominatim-Autocomplete + `LocateFixed`-Button für GPS-Schnellzugriff |
 | 2. Berechnung | OSRM-Routing (open source), vollständige Abbiegeliste |
 | 3. Ladeplanung | Automatische Lade-Stopp-Berechnung nach Reichweite/Akku |
 | 4. Navigation | GPS-Tracking, Schritt-für-Schritt-Anweisung, Spur-Empfehlung |
-| 5. HUD | Vollbild-HUD mit Manöver-Icon, Distanz, Verbleibende Zeit |
+| 5. HUD | Vollbild-HUD mit Manöver-Icon, Distanz, verbleibender Zeit **und Ankunftszeit (HH:MM)** |
+
+#### 5.5.1 HUD-Elemente während der Navigation
+
+| Element | Position | Beschreibung |
+| :--- | :--- | :--- |
+| Mini-Status-Pill | Oben rechts | Restdistanz + Restzeit + LIVE-Badge + Stop-Button |
+| Manöver-Block | HUD oben | Großes Pfeil-Icon + Distanz bis nächster Abbiegung |
+| Spur-Anzeige | HUD Mitte | Empfohlene Fahrspur (wenn Daten vorhanden) |
+| Statuszeile | HUD unten | `Noch X km · ca. Y min` + **Ankunftszeit** (Uhr-Icon + HH:MM) + Lade-Stopp-Hinweis |
+
+### 5.6 NearbyFeed (Dashboard)
+
+Der NearbyFeed zeigt Ladestationen in der Nähe des Nutzerstandorts im Dashboard (Lite/Pro).
+
+**Tabs:**
+
+| Tab | Inhalt |
+| :--- | :--- |
+| Nächste | Nächste verfügbare Stationen, sortiert nach Distanz, mit Rang-Nummerierung |
+| Schnelllader | Stationen mit ≥ 50 kW, absteigend nach Ladeleistung sortiert |
+| Status | Alle Stationen mit Verfügbarkeits-Badge (Online/Offline/Unbekannt) |
+
+**Aufklappbare Stationszeilen:**  
+Jede Station ist als klickbare Zeile dargestellt. Ein Tipp/Klick öffnet eine Detailansicht mit:
+- Vollständige Adresse
+- Anzahl der Ladepunkte
+- Öffnungszeiten (24/7-Kennzeichnung)
+- Betreiber-Name
+- Ladekosten-Text
+- kW-Badges für jede verfügbare Ladeleistung
+- Steckertypen-Badges
+- **„Navigation starten"-Button** → holt GPS-Position, speichert Navigationsziel in `localStorage` und öffnet die Karte mit dem NavigationWizard
+
+**Radius-Auswahl:** 10 km / 25 km / 50 km / 100 km  
+**Aktualisierung:** Manuell via Refresh-Button oder automatisch bei Radius-Änderung
 
 ---
 
@@ -288,10 +325,12 @@ Auf mobilen Geräten (< 768px) wird die Navigation als fixierter Tab-Balken am u
 | Karte | Map | Immer |
 | Route | Navigation | Immer |
 | Dashboard | LayoutDashboard | Eingeloggt |
-| Fahrzeuge | Car | Eingeloggt |
+| Profil | User | Eingeloggt |
 | Einstellungen | Settings | Eingeloggt |
+| **Admin** | ShieldCheck | Nur Admin / Super-Admin |
 
-Nicht-eingeloggte Nutzer sehen nur Karte + Route.
+Nicht-eingeloggte Nutzer sehen nur Karte + Route.  
+Admin- und Super-Admin-Rollen sehen einen zusätzlichen **Admin**-Tab (Schild-Icon) statt des normalen Profil-Tabs.
 
 ### 6.3 Bottom Sheet (Filter & Stationen)
 
@@ -397,6 +436,29 @@ Bei Registrierung und Einladungs-Annahme Pflicht-Zustimmung zu:
 | Impressum | `/de/legal/impressum` |
 | Datenschutzerklärung | `/de/legal/datenschutz` |
 | AGB | `/de/legal/agb` |
+
+---
+
+## 9. Glossar
+
+| Begriff | Bedeutung |
+| :--- | :--- |
+| **HPC** | High Power Charging – Schnelllader ab 150 kW (z. B. Ionity, Fastned) |
+| **DC** | Gleichstrom-Schnelllader, 50–149 kW (z. B. CCS, CHAdeMO) |
+| **AC** | Wechselstrom-Laden, bis 22 kW (Standard-Wallbox, öffentlicher Typ-2) |
+| **CCS** | Combined Charging System – Universeller DC-Stecker (EU-Standard) |
+| **CHAdeMO** | Japanischer DC-Schnelladestecker (Nissan, Mitsubishi) |
+| **OSRM** | Open Source Routing Machine – Routingengine auf Basis von OpenStreetMap |
+| **Nominatim** | Geocoding-Dienst auf Basis von OpenStreetMap-Daten |
+| **BNetzA** | Bundesnetzagentur – Betreiber des offiziellen deutschen Ladesäulenregisters |
+| **OCM** | OpenChargeMap – offene Datenbank für Ladestationen weltweit |
+| **HUD** | Head-Up Display – Vollbild-Navigationsanzeige während Turn-by-Turn Navigation |
+| **NearbyFeed** | Dashboard-Widget mit aufklappbaren Ladestationen im Umkreis des Nutzers |
+| **LocateFixed** | GPS-Schnellzugriff-Button in Adresseingabefeldern; übernimmt den aktuellen Standort per Reverse-Geocoding |
+| **Heatmap** | Dichtekarte: Visualisierung der Ladeinfrastruktur-Konzentration in Deutschland |
+| **Plan-Gate** | Zugriffssperre für Features, die den aktuellen Plan übersteigen; zeigt Upgrade-CTA |
+| **RLS** | Row-Level Security – Supabase-Sicherheitsschicht auf Datenbankebene |
+| **DSGVO** | Datenschutz-Grundverordnung – EU-Datenschutzrecht |
 
 **Datenlöschung:**
 - Nutzer kann unter `/settings` Kontolöschung beantragen

@@ -43,6 +43,17 @@ interface StationCard {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Allowlist of valid locale codes.
+ * Used to prevent open-redirect attacks when building navigation URLs.
+ */
+const ALLOWED_LOCALES = ["de", "en"] as const;
+
+/** Returns a validated locale, falling back to "de" for any unexpected value. */
+function toSafeLocale(l: string): string {
+  return (ALLOWED_LOCALES as readonly string[]).includes(l) ? l : "de";
+}
+
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -119,6 +130,8 @@ function ExpandableStationRow({
   const [open, setOpen] = useState(false);
 
   function handleNavigate() {
+    // Validate locale against the allowlist before using it in a URL redirect.
+    const safeNav = `/${toSafeLocale(locale)}/map`;
     try {
       if (typeof window !== "undefined" && navigator?.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -130,7 +143,7 @@ function ExpandableStationRow({
               toCoord: [s.lat, s.lng],
             };
             localStorage.setItem("lk_nav_preset", JSON.stringify(preset));
-            window.location.href = `/${locale}/map`;
+            window.location.href = safeNav;
           },
           () => {
             const preset = {
@@ -140,15 +153,15 @@ function ExpandableStationRow({
               toCoord: [s.lat, s.lng],
             };
             localStorage.setItem("lk_nav_preset", JSON.stringify(preset));
-            window.location.href = `/${locale}/map`;
+            window.location.href = safeNav;
           },
           { timeout: 5000 },
         );
       } else {
-        window.location.href = `/${locale}/map`;
+        window.location.href = safeNav;
       }
     } catch {
-      window.location.href = `/${locale}/map`;
+      window.location.href = safeNav;
     }
   }
 

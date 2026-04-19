@@ -23,13 +23,15 @@ LadeKompass ist eine webbasierte SaaS-Anwendung für Elektrofahrzeugfahrer. Die 
 
 ## Features
 
-- 🗺️ **Interaktive Ladesäulen-Karte** – MapLibre GL, BNetzA-Daten, Echtzeit-Status
+- 🗺️ **Interaktive Ladesäulen-Karte** – MapLibre GL, BNetzA-Daten, Echtzeit-Status; lebendige Cluster-Farben (grün/amber/rot) mit kräftiger Deckkraft
 - 🔍 **Intelligente Suche & Filter** – nach Ladeleistung, Steckertyp, Status
 - 🛣️ **Routenplanung mit Lade-Stopps** – OSRM-Routing, automatische Ladeplanung
-- 🧭 **Turn-by-Turn Navigation** – GPS-gestützt, Spuranzeige, HUD
+- 🧭 **Turn-by-Turn Navigation** – GPS-gestützt, Spuranzeige, HUD mit Ankunftszeit (HH:MM) und verbleibender Distanz
 - 📊 **Tarif-Vergleich** – kWh-Preise, Minutenpreis, Blockiergebühren; Fallback auf OCM-Preistext → Betreiber-Link → GoingElectric
 - 🔵 **EV-Pin-Icons** – 5 Typen (HPC/DC/AC/Offline/Unbekannt) als farbige SVG-Teardrop-Marker auf der Karte
-- 📍 **NearbyFeed** – Günstigste Stationen in der Nähe im Dashboard (Pro)
+- 📍 **NearbyFeed** – Stationen in der Nähe im Dashboard: aufklappbare Zeilen mit Adresse, Betreiber, kW-Badges, Steckertypen und direktem „Navigation starten"-Button
+- 📍 **Geolocation-Schnellzugriff** – `LocateFixed`-Button in jedem Adresseingabefeld; ein Klick → GPS-Position wird per Nominatim-Reverse-Geocode in eine Adresse umgewandelt
+- 🌡️ **Heatmap** – Dichtekarte mit Erklärungstext (Farbbedeutung) beim Aktivieren
 - 📱 **Mobile First** – Bottom Tab Navigation, Bottom Sheets, Safe Area Support
 - 🌙 **Dark Mode** – vollständig unterstützt
 - 🌐 **Mehrsprachig** – Deutsch + Englisch (next-intl)
@@ -42,9 +44,10 @@ LadeKompass ist eine webbasierte SaaS-Anwendung für Elektrofahrzeugfahrer. Die 
 LadeKompass verwendet eine **Bottom Tab Navigation** als Industrie-Standard für mobile EV-Apps (wie Google Maps, Waze, Komoot):
 
 - **Header** (mobile): Logo + Theme-Toggle + Sprachumschalter
-- **Bottom Tab Bar** (mobile only): Karte | Route | Dashboard | Fahrzeuge | Einstellungen
+- **Bottom Tab Bar** (mobile only): Karte | Route | Dashboard | Profil | Einstellungen  
+  Admin/Super-Admin sehen zusätzlich den **Admin**-Tab (Schild-Icon)
 - **Map-Panel** (mobile): FAB-Button öffnet Bottom Sheet mit Filtern & Stationen
-- **NavigationWizard** (mobile): responsives Panel, oben über der Karte
+- **NavigationWizard** (mobile): responsives Panel, oben über der Karte; enthält `LocateFixed`-Button für schnelle GPS-Standortübernahme
 
 ---
 
@@ -141,6 +144,10 @@ npm run test:coverage       # Mit Coverage-Report
 - `src/lib/plan-limits.ts`
 - `src/lib/legal/consent.ts`
 - `src/lib/map-icons.ts` (36 Tests – Pin-Typen, SVG-Generierung, Leistungslogik)
+
+**Inline-Logik-Tests** (Hilfs-Funktionen in Komponenten):
+- `src/lib/__tests__/navigation-wizard.test.ts` – `fmtDist`, `fmtTime`, `maneuverIconType`, OSRM-Parsing, Ankunftszeit-Formatierung
+- `src/lib/__tests__/nearby-feed.test.ts` – `haversineKm`, `kwColor`, `maxKw`, `connectorLabels`, `toCard`-Logik
 
 ---
 
