@@ -179,7 +179,7 @@ export default function StationMapWrapper() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [show3D, setShow3D] = useState(prefs.show3D);
   const [showHeatmap, setShowHeatmap] = useState(prefs.showHeatmap);
-  const [showLiveFeed, setShowLiveFeed] = useState(prefs.showLiveFeed);
+  const [showLiveFeed] = useState(prefs.showLiveFeed);
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(() => {

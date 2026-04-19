@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Save, Loader2, Eye, EyeOff, Download, AlertTriangle,
@@ -108,10 +108,8 @@ function loadPrefs() {
 }
 
 function MapPrefsSection() {
-  const [prefs, setPrefs] = useState<Record<string, unknown>>({});
+  const [prefs, setPrefs] = useState<Record<string, unknown>>(() => loadPrefs() ?? {});
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => { setPrefs(loadPrefs() ?? {}); }, []);
 
   function update(key: string, value: unknown) {
     const next = { ...prefs, [key]: value };

@@ -397,7 +397,6 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   // ── Vehicle type (determines OSRM routing profile) ──────────────────────
   type VehicleType = "car" | "scooter" | "escooter" | "foot";
   const [vehicleType, setVehicleType] = useState<VehicleType>("car");
-  const [showVehiclePicker, setShowVehiclePicker] = useState(false);
 
   const VEHICLE_OPTIONS: { type: VehicleType; emoji: string; label: string; osrm: string }[] = [
     { type: "car",     emoji: "🚗",  label: "E-Auto",     osrm: "driving" },

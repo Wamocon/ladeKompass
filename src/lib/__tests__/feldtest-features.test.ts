@@ -9,7 +9,7 @@
  * 6. Popup-Größe – CSS min-width Wertvalidierung
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 
 // ─── 1. Radius-Filter ────────────────────────────────────────────────────────
 // Inline-Logik aus NearbyFeed.tsx

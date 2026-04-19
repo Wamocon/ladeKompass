@@ -6,7 +6,6 @@ import {
   getEvPinDataUrl,
   getEvPinSvg,
   getStationPinType,
-  type PinType,
 } from "../map-icons";
 
 // ─────────────────────────────────────────────────────────────────────────────
