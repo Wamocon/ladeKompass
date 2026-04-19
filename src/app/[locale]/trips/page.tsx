@@ -6,6 +6,7 @@ import {
   BatteryCharging, CalendarDays, Route,
 } from "lucide-react";
 import Link from "next/link";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface ChargingStop {
   name?: string;
@@ -159,6 +160,7 @@ export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/trips")
@@ -170,8 +172,10 @@ export default function TripsPage() {
       .catch((e: Error) => { setError(e.message); setLoading(false); });
   }, []);
 
-  async function deleteTrip(id: string) {
-    if (!confirm("Diese Fahrt wirklich löschen?")) return;
+  async function confirmDeleteTrip() {
+    if (!deleteId) return;
+    const id = deleteId;
+    setDeleteId(null);
     setTrips((prev) => prev.filter((t) => t.id !== id));
     await fetch(`/api/trips?id=${id}`, { method: "DELETE" });
   }
@@ -246,10 +250,20 @@ export default function TripsPage() {
 
         <div className="space-y-3">
           {trips.map((trip) => (
-            <TripCard key={trip.id} trip={trip} onDelete={deleteTrip} />
+            <TripCard key={trip.id} trip={trip} onDelete={setDeleteId} />
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        title="Fahrt wirklich löschen?"
+        description="Die gespeicherte Fahrt wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmLabel="Löschen"
+        variant="danger"
+        onConfirm={confirmDeleteTrip}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }

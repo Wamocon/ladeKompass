@@ -6,6 +6,7 @@ import { Plus, Trash2, Star, Pencil, Zap, Battery, Calendar, Gauge, AlertTriangl
 import { listVehicles, deleteVehicle } from "@/lib/actions/vehicles";
 import type { Vehicle } from "@/lib/actions/vehicles";
 import { VehicleForm } from "./VehicleForm";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const CONNECTOR_COLORS: Record<string, string> = {
   ccs: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
@@ -188,6 +189,7 @@ export function VehicleManager() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Vehicle | null | "new">(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -199,8 +201,13 @@ export function VehicleManager() {
   useEffect(() => { startTransition(() => { load(); }); }, []);
 
   async function handleDelete(id: string) {
-    if (!confirm(t("delete_confirm", { fallback: "Fahrzeug Löschen?" }))) return;
-    await deleteVehicle(id);
+    setDeleteId(id);
+  }
+
+  async function confirmDelete() {
+    if (!deleteId) return;
+    setDeleteId(null);
+    await deleteVehicle(deleteId);
     await load();
   }
 
@@ -245,6 +252,16 @@ export function VehicleManager() {
         <Plus size={15} />
         {t("add_vehicle", { fallback: "Fahrzeug hinzufügen" })}
       </button>
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        title={t("delete_confirm", { fallback: "Fahrzeug wirklich löschen?" })}
+        description={t("delete_confirm_desc", { fallback: "Das Fahrzeug wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden." })}
+        confirmLabel={t("delete", { fallback: "Löschen" })}
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }
