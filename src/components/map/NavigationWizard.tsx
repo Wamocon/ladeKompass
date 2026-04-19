@@ -394,6 +394,18 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
       setPanelState("hidden");
     }
   }, []);
+  // ── Vehicle type (determines OSRM routing profile) ──────────────────────
+  type VehicleType = "car" | "scooter" | "escooter" | "foot";
+  const [vehicleType, setVehicleType] = useState<VehicleType>("car");
+
+  const VEHICLE_OPTIONS: { type: VehicleType; emoji: string; label: string; osrm: string }[] = [
+    { type: "car",     emoji: "🚗",  label: "E-Auto",     osrm: "driving" },
+    { type: "scooter", emoji: "🛵",  label: "E-Roller",   osrm: "driving" },
+    { type: "escooter",emoji: "🛴",  label: "E-Scooter",  osrm: "cycling" },
+    { type: "foot",    emoji: "🚶",  label: "Zu Fuß",     osrm: "foot"    },
+  ];
+  const osrmProfile = VEHICLE_OPTIONS.find((v) => v.type === vehicleType)?.osrm ?? "driving";
+
   const [from, setFrom] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [to, setTo] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [loading, setLoading] = useState(false);
@@ -406,6 +418,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const routeRef = useRef<OsrmRoute | null>(null);
+  const currentStepIdxRef = useRef(0); // imperative tracker – avoids stale closures in GPS callbacks
 
   // ── Charging-stop planning ──────────────────────────────────────────────
   const [vehicleRangeKm, setVehicleRangeKm] = useState(300);
@@ -428,7 +441,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setRoute(null);
     setLoading(true);
     setCurrentStepIdx(0);
-    const url = `https://router.project-osrm.org/route/v1/driving/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson&steps=true&annotations=true`;
+    const url = `https://router.project-osrm.org/route/v1/${osrmProfile}/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson&steps=true&annotations=true`;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`OSRM ${res.status}`);
@@ -447,7 +460,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     } finally {
       setLoading(false);
     }
-  }, [onRoute]);
+  }, [onRoute, osrmProfile]);
 
   const handlePlanStops = useCallback(async (r: OsrmRoute) => {
     setPlanningStops(true);
@@ -520,6 +533,8 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setIsNavActive(true);
     onNavActiveChange?.(true);
     setCurrentStepIdx(0);
+    currentStepIdxRef.current = 0;
+    navStartedAtRef.current = new Date().toISOString();
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, heading } = pos.coords;
@@ -527,37 +542,67 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
         onPositionUpdate?.([latitude, longitude, bear]);
         const r = routeRef.current;
         if (!r) return;
-        setCurrentStepIdx((idx) => {
-          const next = r.steps[idx + 1];
-          if (next?.maneuver?.location) {
-            const d = distanceM(latitude, longitude, next.maneuver.location[1], next.maneuver.location[0]);
-            if (d < 80 && idx < r.steps.length - 2) return idx + 1;
+
+        // Imperative step advancement via ref (avoids stale closures in setState)
+        let idx = currentStepIdxRef.current;
+        const nextStep = r.steps[idx + 1];
+        if (nextStep?.maneuver?.location && idx < r.steps.length - 1) {
+          const d = distanceM(latitude, longitude, nextStep.maneuver.location[1], nextStep.maneuver.location[0]);
+          if (d < 150) {
+            idx++;
+            currentStepIdxRef.current = idx;
+            setCurrentStepIdx(idx);
           }
-          return idx;
-        });
-        setCurrentStepIdx((idx) => {
-          const cur = r.steps[idx];
-          if (cur?.maneuver?.location) {
-            const nextLoc = r.steps[idx + 1]?.maneuver?.location;
-            if (nextLoc) setDistToNext(distanceM(latitude, longitude, nextLoc[1], nextLoc[0]));
-          }
-          const dest = r.geometry.coordinates[r.geometry.coordinates.length - 1];
-          const left = distanceM(latitude, longitude, dest[1], dest[0]);
-          setRemainingDist(left);
-          setRemainingTime(Math.round(left / 15));
-          return idx;
-        });
+        }
+
+        // Distance to the next upcoming maneuver point
+        const upcoming = r.steps[idx + 1];
+        if (upcoming?.maneuver?.location) {
+          setDistToNext(distanceM(latitude, longitude, upcoming.maneuver.location[1], upcoming.maneuver.location[0]));
+        }
+
+        // Remaining route distance + ETA
+        const dest = r.geometry.coordinates[r.geometry.coordinates.length - 1];
+        const left = distanceM(latitude, longitude, dest[1], dest[0]);
+        setRemainingDist(left);
+        setRemainingTime(Math.round(left / 15));
       },
       (err) => { setError(`GPS: ${err.message}`); stopNavigation(); },
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 },
     );
   }
 
+  const navStartedAtRef = useRef<string | null>(null);
+
   function stopNavigation() {
     if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
     setIsNavActive(false);
     onNavActiveChange?.(false);
     onNavStop?.();
+
+    // Save completed trip to archive
+    const r = routeRef.current;
+    if (r && from.label && to.label) {
+      void fetch("/api/trips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from_label: from.label,
+          to_label: to.label,
+          from_lat: from.lat,
+          from_lng: from.lng,
+          to_lat: to.lat,
+          to_lng: to.lng,
+          distance_m: r.distance,
+          duration_s: r.duration,
+          charging_stops: chargingPlan?.stops ?? [],
+          route_geometry: r.geometry,
+          started_at: navStartedAtRef.current ?? new Date().toISOString(),
+          ended_at: new Date().toISOString(),
+        }),
+      }).catch(() => { /* silently ignore — user may not be logged in */ });
+    }
+    navStartedAtRef.current = null;
   }
 
   function handleClear() {
@@ -565,7 +610,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setRoute(null); setError(null);
     setFrom({ label: "", lat: null, lng: null });
     setTo({ label: "", lat: null, lng: null });
-    setCurrentStepIdx(0); setDistToNext(null);
+    setCurrentStepIdx(0); currentStepIdxRef.current = 0; setDistToNext(null);
     setChargingPlan(null);
     onChargingStops?.([]);
     onClear();
@@ -576,6 +621,8 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
   const canCalculate = !loading && ((from.lat !== null && to.lat !== null) || (from.label.trim().length >= 3 && to.label.trim().length >= 3));
   const currentStep = route?.steps[currentStepIdx];
   const nextStep = route?.steps[currentStepIdx + 1];
+  // Show the NEXT upcoming maneuver (Google Maps convention); fall back to current at journey end
+  const displayStep = nextStep ?? currentStep;
 
   // ── Google Maps-style bottom HUD during active navigation ────────────────
   if (isNavActive) {
@@ -611,28 +658,26 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
               {/* Main maneuver row */}
               <div className="flex items-center gap-4 px-5 py-4">
                 <div className="bg-green-600 rounded-2xl p-4 shrink-0 shadow-lg">
-                  <ManeuverIcon type={currentStep.maneuver.type} modifier={currentStep.maneuver.modifier} size={42} />
+                  <ManeuverIcon type={displayStep!.maneuver.type} modifier={displayStep!.maneuver.modifier} size={42} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-4xl font-black text-white leading-none">
-                    {distToNext !== null ? fmtDist(distToNext) : fmtDist(currentStep.distance)}
+                    {distToNext !== null ? fmtDist(distToNext) : fmtDist(displayStep!.distance)}
                   </p>
-                  {currentStep.maneuver.modifier && (
+                  {displayStep!.maneuver.modifier && (
                     <p className="text-sm font-bold text-green-400 mt-0.5">
-                      {modifierLabel(currentStep.maneuver.modifier)}
+                      {modifierLabel(displayStep!.maneuver.modifier)}
                     </p>
                   )}
                   <p className="text-base font-semibold text-zinc-200 truncate mt-0.5">
-                    {nextStep
-                      ? `\u2192 ${nextStep.name || nextStep.maneuver.type}`
-                      : currentStep.name || "Ziel erreicht"}
+                    {displayStep!.name || (nextStep ? nextStep.name : "Ziel erreicht")}
                   </p>
                 </div>
               </div>
 
               {/* Lane indicator */}
               {(() => {
-                const lanes = currentStep.intersections?.[0]?.lanes;
+                const lanes = displayStep!.intersections?.[0]?.lanes;
                 return lanes && lanes.length > 0 ? (
                   <div className="px-5 pb-3 -mt-1">
                     <p className="text-[9px] text-green-400/70 uppercase tracking-wider mb-1.5 font-bold">Spurempfehlung</p>
@@ -725,18 +770,18 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
           <div className="bg-green-900 dark:bg-green-950 px-4 py-3 border-b border-green-800">
             <div className="flex items-center gap-3">
               <div className="bg-green-700 rounded-xl p-2.5 shrink-0">
-                <ManeuverIcon type={currentStep.maneuver.type} modifier={currentStep.maneuver.modifier} size={28} />
+                <ManeuverIcon type={displayStep!.maneuver.type} modifier={displayStep!.maneuver.modifier} size={28} />
               </div>
               <div className="flex-1 min-w-0">
                 {distToNext !== null && (
                   <p className="text-2xl font-black text-white leading-none">{fmtDist(distToNext)}</p>
                 )}
                 <p className="text-sm text-green-200 font-semibold truncate mt-0.5">
-                  {nextStep ? `Dann: ${nextStep.name || nextStep.maneuver.type}` : currentStep.name || "Ziel erreicht"}
+                  {displayStep!.name || "Ziel erreicht"}
                 </p>
               </div>
-              {currentStep.maneuver.modifier && (
-                <p className="text-xs text-green-300 font-bold shrink-0">{modifierLabel(currentStep.maneuver.modifier)}</p>
+              {displayStep!.maneuver.modifier && (
+                <p className="text-xs text-green-300 font-bold shrink-0">{modifierLabel(displayStep!.maneuver.modifier)}</p>
               )}
             </div>
             {/* Lane indicator — shown when intersection has lane data */}
@@ -780,6 +825,25 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
             {/* Inputs (hidden during nav) */}
             {!isNavActive && (
               <div className="p-3 space-y-2 border-b border-zinc-100 dark:border-zinc-800">
+                {/* Vehicle type selector */}
+                <div className="flex items-center gap-1.5">
+                  {VEHICLE_OPTIONS.map((v) => (
+                    <button
+                      key={v.type}
+                      type="button"
+                      onClick={() => setVehicleType(v.type)}
+                      title={v.label}
+                      className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-xl border text-[10px] font-semibold transition-colors ${
+                        vehicleType === v.type
+                          ? "bg-green-600 border-green-600 text-white"
+                          : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-green-400"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{v.emoji}</span>
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
                 <GeoInput placeholder="Startadresse…" icon={<MapPin size={13} className="text-green-500" />} value={from.label} onChange={(l, lat, lng) => setFrom({ label: l, lat, lng })} />
                 <div className="flex justify-center py-0.5"><div className="w-px h-3 bg-zinc-200 dark:bg-zinc-700" /></div>
                 <GeoInput placeholder="Zieladresse…" icon={<MapPin size={13} className="text-red-500" />} value={to.label} onChange={(l, lat, lng) => setTo({ label: l, lat, lng })} />

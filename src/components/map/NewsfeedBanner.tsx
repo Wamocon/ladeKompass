@@ -140,9 +140,9 @@ function StationCard({ station, distKm, price, maxKw }: { station: OCMStation; d
 }
 
 export function NewsfeedBanner({ stations, userLocation, isNavActive }: NewsfeedBannerProps) {
-  const [dismissed, setDismissed] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const [currentCard, setCurrentCard] = useState(0);
+  const [hidden, setHidden] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const [activeIdx, setActiveIdx] = useState(0);
   const touchStartX = useRef<number | null>(null);
 
   const nearby = useMemo(() => {
@@ -168,141 +168,200 @@ export function NewsfeedBanner({ stations, userLocation, isNavActive }: Newsfeed
       .slice(0, 20);
   }, [stations, userLocation]);
 
-  if (dismissed || !userLocation || nearby.length === 0 || isNavActive) return null;
+  if (hidden || !userLocation || nearby.length === 0 || isNavActive) {
+    // Show a small re-open button when dismissed
+    if (hidden && !isNavActive && nearby.length > 0) {
+      return (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[595]">
+          <button
+            type="button"
+            onClick={() => setHidden(false)}
+            className="flex items-center gap-1.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-full px-3 py-1.5 shadow-xl text-[11px] font-bold text-zinc-700 dark:text-zinc-200 hover:border-green-400 transition-colors"
+          >
+            <Tag size={11} className="text-green-600 dark:text-green-400" />
+            Livefeed ({nearby.length})
+          </button>
+        </div>
+      );
+    }
+    return null;
+  }
 
-  const safeCard = Math.min(currentCard, nearby.length - 1);
+  const safeIdx = Math.min(activeIdx, nearby.length - 1);
+  const VISIBLE_COUNT = 5;
 
   function handleTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
   }
-
   function handleTouchEnd(e: React.TouchEvent) {
     if (touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
     if (Math.abs(dx) < 30) return;
-    if (dx < 0) setCurrentCard((c) => Math.min(c + 1, nearby.length - 1));
-    else setCurrentCard((c) => Math.max(c - 1, 0));
+    if (dx < 0) setActiveIdx((c) => Math.min(c + 1, nearby.length - 1));
+    else setActiveIdx((c) => Math.max(c - 1, 0));
   }
 
-  const header = (
-    <div className="flex items-center gap-1.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-t-2xl px-2.5 py-1.5 shadow-xl">
-      <Tag size={11} className="text-green-600 dark:text-green-400 shrink-0" />
-      <span className="flex-1 text-[11px] font-bold text-zinc-700 dark:text-zinc-200 truncate">
-        Günstig in 50 km
-      </span>
-      <span className="text-[9px] text-zinc-400 shrink-0">{nearby.length}</span>
-      <button
-        type="button"
-        onClick={() => setCollapsed((v) => !v)}
-        className="p-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400"
-      >
-        {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-      </button>
-      <button
-        type="button"
-        onClick={() => setDismissed(true)}
-        className="p-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400"
-        aria-label="Schließen"
-      >
-        <X size={12} />
-      </button>
-    </div>
-  );
+  // Indices visible around the active card (active ± 2)
+  const visibleIndices = Array.from({ length: Math.min(VISIBLE_COUNT, nearby.length) }, (_, i) => {
+    const offset = i - Math.floor(VISIBLE_COUNT / 2); // -2, -1, 0, 1, 2
+    return Math.max(0, Math.min(nearby.length - 1, safeIdx + offset));
+  }).filter((v, i, a) => a.indexOf(v) === i); // deduplicate at bounds
 
   return (
     <>
-      {/* ─── MOBILE version: compact single-card with swipe ─────────────────── */}
-      <div className="md:hidden absolute bottom-20 left-1/2 -translate-x-1/2 z-[595] pointer-events-none w-[min(92vw,280px)]">
-        <div className="pointer-events-auto">
-          {header}
-          {!collapsed && (
+      {/* ─── Toggle pill (always shown, top-right of the feed area) ─────────── */}
+      <div className="absolute bottom-20 right-4 md:bottom-24 z-[596]">
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          className="flex items-center gap-1.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-full px-2.5 py-1.5 shadow-lg text-[10px] font-bold text-zinc-600 dark:text-zinc-300 hover:border-green-400 transition-colors"
+          title={visible ? "Livefeed ausblenden" : "Livefeed einblenden"}
+        >
+          <Tag size={10} className="text-green-600 dark:text-green-400 shrink-0" />
+          {visible ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+        </button>
+      </div>
+
+      {visible && (
+        <div className="absolute bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-[595] pointer-events-none select-none"
+          style={{ width: "min(96vw, 920px)" }}>
+          <div className="pointer-events-auto">
+
+            {/* ── Header bar ─────────────────────────────────────────────────── */}
+            <div className="flex items-center gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-t-2xl px-3 py-2 shadow-xl">
+              <Tag size={12} className="text-green-600 dark:text-green-400 shrink-0" />
+              <EvStationIcon size={13} className="text-green-600 dark:text-green-400 shrink-0" />
+              <span className="flex-1 text-[11px] font-bold text-zinc-700 dark:text-zinc-200 truncate">
+                Günstigste Ladepunkte im Umkreis · {nearby.length} Stationen
+              </span>
+              <button
+                type="button"
+                onClick={() => setHidden(true)}
+                className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-zinc-600"
+                aria-label="Schließen"
+              >
+                <X size={12} />
+              </button>
+            </div>
+
+            {/* ── Card-deck body ──────────────────────────────────────────────── */}
             <div
-              className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-t-0 border-zinc-200 dark:border-zinc-700 rounded-b-2xl shadow-xl"
+              className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-t-0 border-zinc-200 dark:border-zinc-700 rounded-b-2xl shadow-xl overflow-hidden"
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
             >
-              <div className="px-2.5 pt-2 pb-1">
-                <StationCard {...nearby[safeCard]} />
+              {/* Card row: 5 cards visible, deck-peek on sides */}
+              <div className="flex items-stretch gap-2 px-3 py-3 overflow-hidden relative">
+                {/* Ghost "deck" cards peeking behind left edge */}
+                {safeIdx > 0 && (
+                  <div className="absolute left-1 top-3 bottom-3 w-3 rounded-l-xl bg-gradient-to-r from-zinc-200/60 dark:from-zinc-700/60 to-transparent pointer-events-none z-10" />
+                )}
+                {/* Ghost "deck" cards peeking behind right edge */}
+                {safeIdx < nearby.length - 1 && (
+                  <div className="absolute right-1 top-3 bottom-3 w-3 rounded-r-xl bg-gradient-to-l from-zinc-200/60 dark:from-zinc-700/60 to-transparent pointer-events-none z-10" />
+                )}
+
+                {/* Mobile: single card with depth cards behind */}
+                <div className="md:hidden relative w-full" style={{ minHeight: 80 }}>
+                  {/* Stacked "depth" cards (visual only) */}
+                  {[2, 1].map((depth) => {
+                    const depthIdx = safeIdx + depth;
+                    if (depthIdx >= nearby.length) return null;
+                    return (
+                      <div
+                        key={depthIdx}
+                        className="absolute inset-0 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
+                        style={{
+                          transform: `translateY(${depth * 4}px) scale(${1 - depth * 0.03})`,
+                          zIndex: 10 - depth,
+                          opacity: 1 - depth * 0.25,
+                        }}
+                      />
+                    );
+                  })}
+                  {/* Active card */}
+                  <div className="relative z-20 transition-transform duration-300">
+                    <StationCard {...nearby[safeIdx]} />
+                  </div>
+                </div>
+
+                {/* Desktop: 5 cards side-by-side with depth effect */}
+                {visibleIndices.map((cardIdx, pos) => {
+                  const isActive = cardIdx === safeIdx;
+                  const distFromActive = Math.abs(pos - visibleIndices.indexOf(safeIdx));
+                  return (
+                    <button
+                      key={cardIdx}
+                      type="button"
+                      onClick={() => setActiveIdx(cardIdx)}
+                      className={`hidden md:block flex-1 min-w-0 text-left transition-all duration-300 rounded-xl
+                        ${isActive
+                          ? "ring-2 ring-green-400 dark:ring-green-500 scale-105 shadow-lg z-20"
+                          : "opacity-75 hover:opacity-90 hover:scale-102 z-10"
+                        }`}
+                      style={{
+                        transform: isActive
+                          ? "scale(1.04) translateY(-2px)"
+                          : `scale(${1 - distFromActive * 0.02}) translateY(${distFromActive * 2}px)`,
+                        transition: "all 0.25s cubic-bezier(0.34,1.56,0.64,1)",
+                        filter: distFromActive > 1 ? `blur(${(distFromActive - 1) * 0.3}px)` : "none",
+                      }}
+                    >
+                      <StationCard {...nearby[cardIdx]} />
+                    </button>
+                  );
+                })}
               </div>
-              {/* Navigation controls + dots */}
-              <div className="flex items-center justify-between px-2.5 pb-2 pt-1">
+
+              {/* Navigation controls */}
+              <div className="flex items-center justify-between px-3 pb-2.5 pt-1 border-t border-zinc-100 dark:border-zinc-800">
                 <button
                   type="button"
-                  onClick={() => setCurrentCard((c) => Math.max(c - 1, 0))}
-                  disabled={safeCard === 0}
-                  className="p-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 disabled:opacity-30 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                  onClick={() => setActiveIdx((c) => Math.max(c - 1, 0))}
+                  disabled={safeIdx === 0}
+                  className="p-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 disabled:opacity-30 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                   aria-label="Vorherige Station"
                 >
                   <ChevronLeft size={14} />
                 </button>
+
                 {/* Dot indicators */}
-                <div className="flex gap-1">
-                  {nearby.slice(0, Math.min(nearby.length, 8)).map((_, i) => (
+                <div className="flex gap-1 items-center">
+                  {nearby.slice(0, Math.min(nearby.length, 12)).map((_, i) => (
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setCurrentCard(i)}
-                      className={`rounded-full transition-all ${i === safeCard ? "w-3 h-2 bg-green-500" : "w-2 h-2 bg-zinc-300 dark:bg-zinc-600"}`}
+                      onClick={() => setActiveIdx(i)}
+                      className={`rounded-full transition-all duration-200 ${
+                        i === safeIdx
+                          ? "w-4 h-2 bg-green-500"
+                          : Math.abs(i - safeIdx) <= 2
+                          ? "w-2 h-2 bg-zinc-300 dark:bg-zinc-600"
+                          : "w-1.5 h-1.5 bg-zinc-200 dark:bg-zinc-700"
+                      }`}
                       aria-label={`Station ${i + 1}`}
                     />
                   ))}
-                  {nearby.length > 8 && <span className="text-[9px] text-zinc-400">…</span>}
+                  {nearby.length > 12 && (
+                    <span className="text-[9px] text-zinc-400 ml-1">+{nearby.length - 12}</span>
+                  )}
                 </div>
+
                 <button
                   type="button"
-                  onClick={() => setCurrentCard((c) => Math.min(c + 1, nearby.length - 1))}
-                  disabled={safeCard === nearby.length - 1}
-                  className="p-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 disabled:opacity-30 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                  onClick={() => setActiveIdx((c) => Math.min(c + 1, nearby.length - 1))}
+                  disabled={safeIdx === nearby.length - 1}
+                  className="p-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 disabled:opacity-30 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                   aria-label="Nächste Station"
                 >
                   <ChevronRight size={14} />
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* ─── DESKTOP version: horizontal scroll ─────────────────────────────── */}
-      <div className="hidden md:block absolute bottom-20 left-1/2 -translate-x-1/2 z-[595] pointer-events-none w-full max-w-[55vw] min-w-[380px] px-3">
-        <div className="pointer-events-auto">
-          <div className="flex items-center gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 rounded-t-2xl px-3 py-2 shadow-xl">
-            <Tag size={13} className="text-green-600 dark:text-green-400 shrink-0" />
-            <EvStationIcon size={14} className="text-green-600 dark:text-green-400 shrink-0" />
-            <span className="flex-1 text-xs font-bold text-zinc-700 dark:text-zinc-200">
-              Günstigste Ladepunkte im Umkreis 50 km
-            </span>
-            <span className="text-[10px] text-zinc-400">{nearby.length} Stationen</span>
-            <button
-              type="button"
-              onClick={() => setCollapsed((v) => !v)}
-              className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-zinc-600"
-            >
-              {collapsed ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDismissed(true)}
-              className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-zinc-600"
-              aria-label="Schließen"
-            >
-              <X size={13} />
-            </button>
           </div>
-          {!collapsed && (
-            <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-t-0 border-zinc-200 dark:border-zinc-700 rounded-b-2xl shadow-xl overflow-x-auto">
-              <div className="flex gap-2.5 px-3 py-3" style={{ width: "max-content" }}>
-                {nearby.map(({ station, distKm, price, maxKw }) => (
-                  <div key={station.ID} className="w-44 shrink-0">
-                    <StationCard station={station} distKm={distKm} price={price} maxKw={maxKw} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
+      )}
     </>
   );
 }

@@ -113,24 +113,73 @@ function PanelSection({
   );
 }
 
-// â”€â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Map preferences (persisted to localStorage) ──────────────────────────
 
-export default function StationMapWrapper() {
-  const [filters, setFilters] = useState<StationFiltersState>({
+export interface MapPrefs {
+  mapStyle: MapStyle;
+  powerLevel: "all" | "ac" | "dc" | "hpc" | null;
+  connectorType: string | null;
+  showHeatmap: boolean;
+  show3D: boolean;
+  showLiveFeed: boolean;
+}
+
+const MAP_PREFS_KEY = "lk-map-prefs";
+
+function loadMapPrefs(): MapPrefs {
+  if (typeof window === "undefined") return defaultMapPrefs();
+  try {
+    const raw = localStorage.getItem(MAP_PREFS_KEY);
+    if (raw) return { ...defaultMapPrefs(), ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return defaultMapPrefs();
+}
+
+function defaultMapPrefs(): MapPrefs {
+  return {
+    mapStyle: "light",
     powerLevel: null,
     connectorType: null,
+    showHeatmap: false,
+    show3D: false,
+    showLiveFeed: true,
+  };
+}
+
+export function saveMapPrefs(prefs: Partial<MapPrefs>) {
+  if (typeof window === "undefined") return;
+  try {
+    const current = loadMapPrefs();
+    localStorage.setItem(MAP_PREFS_KEY, JSON.stringify({ ...current, ...prefs }));
+  } catch { /* ignore */ }
+}
+
+// ─── Main component ─────────────────────────────────────────────────────────
+
+export default function StationMapWrapper() {
+  const prefs = loadMapPrefs();
+  // Validate stored values against allowed union types
+  const safePower = (["ac", "dc", "hpc", null] as const).includes(prefs.powerLevel as "ac" | "dc" | "hpc" | null)
+    ? (prefs.powerLevel as "ac" | "dc" | "hpc" | null) : null;
+  const safeConnector = (["type2", "ccs", "chademo", "tesla_ccs", null] as const).includes(
+    prefs.connectorType as "type2" | "ccs" | "chademo" | "tesla_ccs" | null)
+    ? (prefs.connectorType as "type2" | "ccs" | "chademo" | "tesla_ccs" | null) : null;
+  const [filters, setFilters] = useState<StationFiltersState>({
+    powerLevel: safePower,
+    connectorType: safeConnector,
   });
   const [flyToCenter, setFlyToCenter] = useState<[number, number] | null>(null);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [visibleStations, setVisibleStations] = useState<OCMStation[]>([]);
   const [selectedStation, setSelectedStation] = useState<OCMStation | null>(null);
-  const [mapStyle, setMapStyle] = useState<MapStyle>("light");
+  const [mapStyle, setMapStyle] = useState<MapStyle>(prefs.mapStyle);
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [show3D, setShow3D] = useState(false);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [show3D, setShow3D] = useState(prefs.show3D);
+  const [showHeatmap, setShowHeatmap] = useState(prefs.showHeatmap);
+  const [showLiveFeed] = useState(prefs.showLiveFeed);
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(() => {
@@ -149,19 +198,27 @@ export default function StationMapWrapper() {
   const [navPosition, setNavPosition] = useState<[number, number, number] | null>(null);
   const [chargingStops, setChargingStops] = useState<PlannedChargingStop[]>([]);
   const [isNavActive, setIsNavActive] = useState(false);
+  const [userHeading, setUserHeading] = useState<number | null>(null);
+  const locWatchRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (navigator?.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-          setUserLocation(loc);
-          setFlyToCenter(loc);
-        },
-        () => {},
-        { timeout: 6000 },
-      );
-    }
+    if (!navigator?.geolocation) return;
+    // Watch position for continuous heading updates (direction arrow on map)
+    locWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        setUserLocation(loc);
+        setFlyToCenter((prev) => prev ?? loc); // only fly on first fix
+        if (pos.coords.heading !== null && Number.isFinite(pos.coords.heading)) {
+          setUserHeading(pos.coords.heading);
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 },
+    );
+    return () => {
+      if (locWatchRef.current !== null) navigator.geolocation.clearWatch(locWatchRef.current);
+    };
   }, []);
 
   const handleLocationSelect = useCallback((lat: number, lng: number) => {
@@ -565,7 +622,7 @@ export default function StationMapWrapper() {
             <div className="space-y-1.5">
               <button
                 type="button"
-                onClick={() => setShow3D((v) => !v)}
+                onClick={() => { setShow3D((v) => { const n = !v; saveMapPrefs({ show3D: n }); return n; }); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
                   show3D
                     ? "bg-sky-50 dark:bg-sky-900/30 border-sky-400 text-sky-700 dark:text-sky-300"
@@ -580,7 +637,7 @@ export default function StationMapWrapper() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowHeatmap((v) => !v)}
+                onClick={() => { setShowHeatmap((v) => { const n = !v; saveMapPrefs({ showHeatmap: n }); return n; }); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
                   showHeatmap
                     ? "bg-orange-50 dark:bg-orange-900/30 border-orange-400 text-orange-700 dark:text-orange-300"
@@ -609,7 +666,7 @@ export default function StationMapWrapper() {
                 <button
                   key={style.key}
                   type="button"
-                  onClick={() => { setMapStyle(style.key); setShowStylePicker(false); }}
+                  onClick={() => { setMapStyle(style.key); setShowStylePicker(false); saveMapPrefs({ mapStyle: style.key }); }}
                   className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     mapStyle === style.key
                       ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700"
@@ -784,11 +841,13 @@ export default function StationMapWrapper() {
       />
 
       {/* Newsfeed Banner - cheapest stations within 50km */}
-      <NewsfeedBanner
-        stations={visibleStations}
-        userLocation={userLocation}
-        isNavActive={isNavActive}
-      />
+      {showLiveFeed && (
+        <NewsfeedBanner
+          stations={visibleStations}
+          userLocation={userLocation}
+          isNavActive={isNavActive}
+        />
+      )}
 
       <StationMapGL
         defaultCenter={[51.1657, 10.4515]}
@@ -803,6 +862,7 @@ export default function StationMapWrapper() {
         selectedStation={selectedStation}
         routeGeoJSON={routeGeoJSON}
         navPosition={navPosition}
+        userHeading={userHeading}
         chargingStops={chargingStops}
         onNavigateTo={(lat, lng, label) => {
           // Always get fresh GPS position for most accurate start point

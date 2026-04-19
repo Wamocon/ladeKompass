@@ -26,11 +26,14 @@ LadeKompass ist eine webbasierte SaaS-Anwendung für Elektrofahrzeugfahrer. Die 
 - 🗺️ **Interaktive Ladesäulen-Karte** – MapLibre GL, BNetzA-Daten, Echtzeit-Status; lebendige Cluster-Farben (grün/amber/rot) mit kräftiger Deckkraft
 - 🔍 **Intelligente Suche & Filter** – nach Ladeleistung, Steckertyp, Status
 - 🛣️ **Routenplanung mit Lade-Stopps** – OSRM-Routing, automatische Ladeplanung
+- 🗯️ **Fahrzeugtyp-Auswahl** – 🚗 E-Auto · 🛵 E-Roller · 🛴 E-Scooter · 🚶 Zu Fuß; jeder Typ wählt automatisch das passende OSRM-Profil (`driving` / `cycling` / `foot`)
 - 🧭 **Turn-by-Turn Navigation** – GPS-gestützt, Spuranzeige, HUD mit Ankunftszeit (HH:MM) und verbleibender Distanz
+- ➡️ **Richtungsanzeiger** – Standort-Marker zeigt einen rotierenden GPS-Heading-Pfeil (Fallback: pulsierender Punkt wenn kein Heading verfügbar)
 - 📊 **Tarif-Vergleich** – kWh-Preise, Minutenpreis, Blockiergebühren; Fallback auf OCM-Preistext → Betreiber-Link → GoingElectric
-- 🔵 **EV-Pin-Icons** – 5 Typen (HPC/DC/AC/Offline/Unbekannt) als farbige SVG-Teardrop-Marker auf der Karte
-- 📍 **NearbyFeed** – Stationen in der Nähe im Dashboard: aufklappbare Zeilen mit Adresse, Betreiber, kW-Badges, Steckertypen und direktem „Navigation starten"-Button
+- 🔵 **EV-Pin-Icons** – 5 Typen (HPC/DC/AC/Offline/Unbekannt) als farbige SVG-Teardrop-Marker; **4× Supersampling** (144×184 px physisch, `pixelRatio: 4`) für gestochen scharfe Darstellung auf HiDPI-/Retina-Displays
+- 📍 **NearbyFeed** – Stationen in der Nähe im Dashboard: aufklappbare Zeilen mit Adresse, Betreiber, kW-Badges, Steckertypen und direktem „Navigation starten“-Button; **Radius-Filter client-seitig per Haversine** (OCM-Abfrage mit 1,5× Radius, danach exakter Filter)
 - 📍 **Geolocation-Schnellzugriff** – `LocateFixed`-Button in jedem Adresseingabefeld; ein Klick → GPS-Position wird per Nominatim-Reverse-Geocode in eine Adresse umgewandelt
+- ⚙️ **Karten-Einstellungen** – Kartenstil, Ladeleistungsfilter, Steckertyp, Live-Feed, Heatmap und 3D als dauerhafte Nutzerpräferenzen in den Einstellungen (`localStorage`-Key `lk-map-prefs`)
 - 🌡️ **Heatmap** – Dichtekarte mit Erklärungstext (Farbbedeutung) beim Aktivieren
 - 📱 **Mobile First** – Bottom Tab Navigation, Bottom Sheets, Safe Area Support
 - 🌙 **Dark Mode** – vollständig unterstützt
@@ -148,6 +151,9 @@ npm run test:coverage       # Mit Coverage-Report
 **Inline-Logik-Tests** (Hilfs-Funktionen in Komponenten):
 - `src/lib/__tests__/navigation-wizard.test.ts` – `fmtDist`, `fmtTime`, `maneuverIconType`, OSRM-Parsing, Ankunftszeit-Formatierung
 - `src/lib/__tests__/nearby-feed.test.ts` – `haversineKm`, `kwColor`, `maxKw`, `connectorLabels`, `toCard`-Logik
+
+**Feldtest-Feature-Tests** (neu, April 2026):
+- `src/lib/__tests__/feldtest-features.test.ts` – Radius-Client-Filter, MapPrefs-Persistenz-Logik, PIN_PIXEL_RATIO 4×, Heading-Validierung, Fahrzeugtyp→OSRM-Profil-Mapping, Popup-Größe-Constraints
 
 ---
 

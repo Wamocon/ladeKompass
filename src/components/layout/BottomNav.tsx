@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Map, Navigation, LayoutDashboard, User, Settings, ShieldCheck } from "lucide-react";
+import { Map, Navigation, LayoutDashboard, User, Settings, ShieldCheck, BookOpen } from "lucide-react";
 
 interface BottomNavProps {
   isAuthenticated?: boolean;
@@ -23,6 +23,7 @@ export function BottomNav({ isAuthenticated = false, userRole }: BottomNavProps)
     ...(isAuthenticated
       ? [
           { href: `/${locale}/dashboard`, label: t("dashboard"), icon: LayoutDashboard },
+          { href: `/${locale}/trips`, label: "Fahrten", icon: BookOpen },
           { href: `/${locale}/profile`, label: t("profile"), icon: User },
           ...(isAdmin
             ? [{ href: `/${locale}/admin`, label: t("admin"), icon: ShieldCheck }]
