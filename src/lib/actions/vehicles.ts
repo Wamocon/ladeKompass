@@ -14,7 +14,7 @@ export interface Vehicle {
   ac_charge_kw?: number;
   connector_type?: string;
   is_default: boolean;
-  // Extended fields
+  // Extended fields (require migration 20260415000001)
   year?: number;
   color?: string;
   license_plate?: string;
@@ -56,6 +56,16 @@ export interface VehicleUpsertInput {
   efficiency_kwh_per_100km?: number;
 }
 
+/** Columns that exist before migration 20260415000001 */
+const BASE_VEHICLE_KEYS = new Set([
+  "id", "user_id", "name", "brand", "model",
+  "battery_kwh", "max_charge_kw", "ac_charge_kw", "connector_type", "is_default",
+]);
+
+function isSchemaError(msg: string) {
+  return msg.includes("column") || msg.includes("schema cache") || msg.includes("does not exist");
+}
+
 export async function listVehicles(): Promise<Vehicle[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -72,7 +82,7 @@ export async function listVehicles(): Promise<Vehicle[]> {
   return (data as Vehicle[]) ?? [];
 }
 
-export async function upsertVehicle(input: VehicleUpsertInput): Promise<{ error?: string }> {
+export async function upsertVehicle(input: VehicleUpsertInput): Promise<{ error?: string; warning?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthenticated" };
@@ -86,23 +96,40 @@ export async function upsertVehicle(input: VehicleUpsertInput): Promise<{ error?
   }
 
   const rawPayload = { ...input, user_id: user.id };
+  // Strip undefined, null, empty strings, and NaN
   const payload = Object.fromEntries(
-    Object.entries(rawPayload).filter(([, v]) => v !== undefined && v !== null && v !== ""),
+    Object.entries(rawPayload).filter(([, v]) =>
+      v !== undefined && v !== null && v !== "" && !(typeof v === "number" && isNaN(v)),
+    ),
   );
+  // Always include required fields
   payload.name = input.name;
   payload.battery_kwh = input.battery_kwh;
   payload.is_default = input.is_default ?? false;
   payload.user_id = user.id;
 
-  let error;
-  if (input.id) {
-    ({ error } = await serviceSupabase
-      .from("vehicles")
-      .update(payload)
-      .eq("id", input.id)
-      .eq("user_id", user.id));
-  } else {
-    ({ error } = await serviceSupabase.from("vehicles").insert(payload));
+  async function runSave(p: Record<string, unknown>) {
+    if (input.id) {
+      return serviceSupabase.from("vehicles").update(p).eq("id", input.id!).eq("user_id", user!.id);
+    }
+    return serviceSupabase.from("vehicles").insert(p);
+  }
+
+  const { error } = await runSave(payload);
+
+  // Graceful fallback: if extended columns don't exist yet (migration not run),
+  // retry with only base columns so the vehicle is saved without extended fields.
+  if (error && isSchemaError(error.message)) {
+    const basePayload = Object.fromEntries(
+      Object.entries(payload).filter(([k]) => BASE_VEHICLE_KEYS.has(k)),
+    );
+    const { error: fallbackError } = await runSave(basePayload);
+    if (fallbackError) return { error: fallbackError.message };
+    revalidatePath("/[locale]/profile", "page");
+    return {
+      warning:
+        "Fahrzeug gespeichert. Erweiterte Felder (Farbe, Kennzeichen, etc.) werden erst nach der Datenbankaktualisierung gespeichert.",
+    };
   }
 
   if (error) return { error: error.message };
@@ -128,3 +155,4 @@ export async function deleteVehicle(id: string): Promise<{ error?: string }> {
   revalidatePath("/[locale]/profile", "page");
   return {};
 }
+

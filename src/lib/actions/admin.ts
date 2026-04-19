@@ -37,25 +37,31 @@ export async function updateUserPlan(
   }
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
+  const fullUpdates: Record<string, unknown> = {
     plan,
     plan_started_at: now,
     is_trial: options?.isTrial ?? false,
-    updated_at: now,
   };
 
   if (options?.isTrial && options.trialDays) {
     const trialEnd = new Date(
       Date.now() + options.trialDays * 24 * 60 * 60 * 1000,
     ).toISOString();
-    updates.trial_ends_at = trialEnd;
-    updates.plan_expires_at = trialEnd;
+    fullUpdates.trial_ends_at = trialEnd;
+    fullUpdates.plan_expires_at = trialEnd;
   } else {
-    updates.trial_ends_at = null;
-    updates.plan_expires_at = options?.expiresAt ?? null;
+    fullUpdates.trial_ends_at = null;
+    fullUpdates.plan_expires_at = options?.expiresAt ?? null;
   }
 
-  const { error } = await svc.from("profiles").update(updates).eq("id", userId);
+  let { error } = await svc.from("profiles").update(fullUpdates).eq("id", userId);
+
+  // Fallback: if subscription columns don't exist yet (migration 20260419000002 not run),
+  // update only the plan column which always exists.
+  if (error && (error.message.includes("column") || error.message.includes("schema cache") || error.message.includes("does not exist"))) {
+    ({ error } = await svc.from("profiles").update({ plan }).eq("id", userId));
+  }
+
   if (error) return { error: error.message };
 
   revalidatePath("/[locale]/admin/users", "page");
@@ -76,7 +82,7 @@ export async function updateUserRole(
 
   const { error } = await ctx.svc
     .from("profiles")
-    .update({ role, updated_at: new Date().toISOString() })
+    .update({ role })
     .eq("id", userId);
   if (error) return { error: error.message };
 
@@ -102,7 +108,7 @@ export async function updateUserDisplayName(
 
   const { error } = await svc
     .from("profiles")
-    .update({ display_name: trimmed, updated_at: new Date().toISOString() })
+    .update({ display_name: trimmed })
     .eq("id", userId);
   if (error) return { error: error.message };
 

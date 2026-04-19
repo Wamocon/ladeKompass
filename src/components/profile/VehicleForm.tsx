@@ -24,6 +24,7 @@ export function VehicleForm({ vehicle, onDone }: VehicleFormProps) {
   const t = useTranslations("vehicle");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [selectedBrand, setSelectedBrand] = useState<string>(vehicle?.brand ?? "");
 
   const [form, setForm] = useState<VehicleUpsertInput>({
@@ -82,7 +83,7 @@ export function VehicleForm({ vehicle, onDone }: VehicleFormProps) {
         type === "checkbox"
           ? (e.target as HTMLInputElement).checked
           : type === "number"
-          ? parseFloat(value) || 0
+          ? (value === "" ? undefined : parseFloat(value))
           : value,
     }));
   }
@@ -90,9 +91,11 @@ export function VehicleForm({ vehicle, onDone }: VehicleFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setWarning(null);
     startTransition(async () => {
       const res = await upsertVehicle(form);
       if (res.error) setError(res.error);
+      else if (res.warning) setWarning(res.warning);
       else onDone();
     });
   }
@@ -323,6 +326,12 @@ export function VehicleForm({ vehicle, onDone }: VehicleFormProps) {
       </label>
 
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {warning && (
+        <div className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          {warning}
+          <button type="button" onClick={onDone} className="ml-2 underline font-semibold">Schließen</button>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button type="submit" disabled={isPending}
