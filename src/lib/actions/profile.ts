@@ -27,10 +27,11 @@ export async function updateProfile(input: ProfileUpdateInput): Promise<{ error?
   if (!user) return { error: "Nicht angemeldet" };
 
   const serviceSupabase = createServiceClient();
+  // Use upsert so a missing profile row is created instead of silently ignored.
+  // NOTE: Do NOT include updated_at – it is not in the profiles migrations.
   const { error } = await serviceSupabase
     .from("profiles")
-    .update({ ...input, updated_at: new Date().toISOString() })
-    .eq("id", user.id);
+    .upsert({ id: user.id, ...input }, { onConflict: "id" });
 
   if (error) return { error: error.message };
   revalidatePath("/[locale]/profile", "page");
