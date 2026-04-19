@@ -380,7 +380,6 @@ export function StationMapGL({
         },
       });
 
-      // Individual station — EV map pin icon (type + power-level sized)
       map.addLayer({
         id:     POINT_LAYER,
         type:   "symbol",
@@ -388,7 +387,14 @@ export function StationMapGL({
         filter: ["!", ["has", "point_count"]],
         layout: {
           "icon-image":         ["get", "pinType"],
-          "icon-size":          ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.1, 22, 1.3, 50, 1.56, 150, 1.9],
+          // Scale icons with zoom level so they remain readable when zoomed in
+          "icon-size":          [
+            "interpolate", ["exponential", 1.4], ["zoom"],
+            9,  ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 50, 0.70, 150, 0.90],
+            12, ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.90, 50, 1.10, 150, 1.40],
+            15, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.40, 50, 1.70, 150, 2.10],
+            18, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.90, 50, 2.30, 150, 2.80],
+          ],
           "icon-allow-overlap": true,
           "icon-anchor":        "bottom",
         },
@@ -489,14 +495,37 @@ export function StationMapGL({
       if (!found) return;
       if (popupRef.current) popupRef.current.remove();
 
+      const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+      const bgColor = isDark ? "rgba(8,8,18,0.97)" : "rgba(255,255,255,0.97)";
+      const textColor = isDark ? "#fff" : "#0f172a";
+      const mutedColor = isDark ? "rgba(255,255,255,0.45)" : "#475569";
+      const subduedColor = isDark ? "rgba(255,255,255,0.28)" : "#94a3b8";
+      const borderColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)";
+      const sectionBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
+      const rowBorder = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)";
+      const shadowColor = isDark ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.2)";
+      const statusGreenBg = isDark ? "rgba(0,255,136,0.15)" : "rgba(22,163,74,0.12)";
+      const statusGreenText = isDark ? "#00ff88" : "#15803d";
+      const statusGreenBorder = isDark ? "rgba(0,255,136,0.3)" : "rgba(22,163,74,0.3)";
+      const statusRedBg = isDark ? "rgba(255,71,87,0.15)" : "rgba(220,38,38,0.10)";
+      const statusRedText = isDark ? "#ff4757" : "#dc2626";
+      const statusRedBorder = isDark ? "rgba(255,71,87,0.3)" : "rgba(220,38,38,0.25)";
+      const statusAmberBg = isDark ? "rgba(251,191,36,0.15)" : "rgba(217,119,6,0.12)";
+      const statusAmberText = isDark ? "#fbbf24" : "#b45309";
+      const statusAmberBorder = isDark ? "rgba(251,191,36,0.3)" : "rgba(217,119,6,0.3)";
+      const linkColor = isDark ? "#60a5fa" : "#2563eb";
+      const priceColor = isDark ? "#fbbf24" : "#d97706";
+      const connTypeColor = isDark ? "rgba(255,255,255,0.65)" : "#475569";
+
       const kw = maxKw(found);
       const col = stationColor(found);
       const isOp = found.StatusType?.IsOperational;
+
       const statusBadge = isOp === true
-        ? `<span style="background:rgba(0,255,136,0.15);color:#00ff88;border:1px solid rgba(0,255,136,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✓ Verfügbar</span>`
+        ? `<span style="background:${statusGreenBg};color:${statusGreenText};border:1px solid ${statusGreenBorder};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✓ Verfügbar</span>`
         : isOp === false
-        ? `<span style="background:rgba(255,71,87,0.15);color:#ff4757;border:1px solid rgba(255,71,87,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">✗ Außer Betrieb</span>`
-        : `<span style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">? Status unbekannt</span>`;
+        ? `<span style="background:${statusRedBg};color:${statusRedText};border:1px solid ${statusRedBorder};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✗ Außer Betrieb</span>`
+        : `<span style="background:${statusAmberBg};color:${statusAmberText};border:1px solid ${statusAmberBorder};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">? Status unbekannt</span>`;
       const powerLabel = kw >= 150 ? "HPC Ultra-Schnell" : kw >= 50 ? "DC Schnell" : kw >= 22 ? "DC" : kw > 0 ? "AC Normal" : "";
 
       // Connector rows grouped by type+power
@@ -504,62 +533,84 @@ export function StationMapGL({
         const type = c.ConnectionType?.Title ?? "Unbekannt";
         const pw = c.PowerKW ? `${c.PowerKW} kW` : "–";
         const qty = c.Quantity ? ` ×${c.Quantity}` : "";
-        const pwColor = (c.PowerKW ?? 0) >= 150 ? "#c084fc" : (c.PowerKW ?? 0) >= 22 ? "#60a5fa" : "#a3a3a3";
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-          <span style="color:rgba(255,255,255,0.7);font-size:11px;">${type}${qty}</span>
-          <span style="color:${pwColor};font-weight:700;font-size:11.5px;">${pw}</span>
+        const pwColor = (c.PowerKW ?? 0) >= 150 ? (isDark ? "#c084fc" : "#7c3aed") : (c.PowerKW ?? 0) >= 22 ? (isDark ? "#60a5fa" : "#2563eb") : mutedColor;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid ${rowBorder};">
+          <span style="color:${connTypeColor};font-size:12px;">${type}${qty}</span>
+          <span style="color:${pwColor};font-weight:700;font-size:13px;">${pw}</span>
         </div>`;
       }).join("");
 
       // Opening / access
       const hours = found.OpeningTimes?.IsOpen247
-        ? `<div style="font-size:11px;color:#4ade80;margin-top:5px;">🕐 24/7 geöffnet</div>`
+        ? `<div style="font-size:12px;color:#16a34a;margin-top:6px;">🕐 24/7 geöffnet</div>`
         : "";
       const access = found.AddressInfo.AccessComments
-        ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;font-style:italic;">${found.AddressInfo.AccessComments}</div>`
+        ? `<div style="font-size:11px;color:${subduedColor};margin-top:5px;font-style:italic;">${found.AddressInfo.AccessComments}</div>`
         : "";
 
       // Unique price container
       const priceId = `lk-price-${found.ID}`;
       const chargepriceUrl = `https://www.chargeprice.app/?station=${found.UUID}&source=ocm`;
 
-      const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}');var _p=this.closest('.maplibregl-popup');if(_p)_p.remove();" style="margin-top:10px;width:100%;padding:9px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">▶ Navigation starten</button>`;
+      const navBtn = `<button onclick="window.__lkNav&&window.__lkNav(${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},'${found.AddressInfo.Title.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}');var _p=this.closest('.maplibregl-popup');if(_p)_p.remove();" style="flex:1;padding:11px;background:#2563eb;border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">▶ Navigation starten</button>`;
+
+      // Community comment form (inline, toggled by button)
+      const commentFormId = `lk-comments-${found.ID}`;
+      const commentTextId = `lk-comment-text-${found.ID}`;
+      const commentStatusId = `lk-comment-status-${found.ID}`;
+      const commentFormHtml = `
+        <div style="margin-top:8px;">
+          <button onclick="var f=document.getElementById('${commentFormId}');f.style.display=f.style.display==='none'?'block':'none';" style="width:100%;padding:9px;background:${sectionBg};border:1px solid ${borderColor};border-radius:12px;color:${mutedColor};font-size:12px;font-weight:600;cursor:pointer;text-align:left;">💬 Community-Kommentar hinterlassen</button>
+          <div id="${commentFormId}" style="display:none;margin-top:8px;padding:12px;background:${sectionBg};border:1px solid ${borderColor};border-radius:12px;">
+            <p style="font-size:11px;color:${subduedColor};margin:0 0 8px 0;">Status oder Kommentar:</p>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
+              <button onclick="window.__lkComment&&window.__lkComment('${found.ID}','${found.AddressInfo.Title.replace(/'/g,"\\'").replace(/[<>]/g,"")}','available',document.getElementById('${commentTextId}').value,${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},document.getElementById('${commentStatusId}'))" style="padding:4px 10px;border-radius:20px;border:1px solid #16a34a;color:#16a34a;background:transparent;font-size:11px;font-weight:600;cursor:pointer;">✓ Verfügbar</button>
+              <button onclick="window.__lkComment&&window.__lkComment('${found.ID}','${found.AddressInfo.Title.replace(/'/g,"\\'").replace(/[<>]/g,"")}','occupied',document.getElementById('${commentTextId}').value,${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},document.getElementById('${commentStatusId}'))" style="padding:4px 10px;border-radius:20px;border:1px solid #d97706;color:#d97706;background:transparent;font-size:11px;font-weight:600;cursor:pointer;">⏳ Belegt</button>
+              <button onclick="window.__lkComment&&window.__lkComment('${found.ID}','${found.AddressInfo.Title.replace(/'/g,"\\'").replace(/[<>]/g,"")}','defect',document.getElementById('${commentTextId}').value,${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},document.getElementById('${commentStatusId}'))" style="padding:4px 10px;border-radius:20px;border:1px solid #dc2626;color:#dc2626;background:transparent;font-size:11px;font-weight:600;cursor:pointer;">✗ Defekt</button>
+              <button onclick="window.__lkComment&&window.__lkComment('${found.ID}','${found.AddressInfo.Title.replace(/'/g,"\\'").replace(/[<>]/g,"")}','comment',document.getElementById('${commentTextId}').value,${found.AddressInfo.Latitude},${found.AddressInfo.Longitude},document.getElementById('${commentStatusId}'))" style="padding:4px 10px;border-radius:20px;border:1px solid ${borderColor};color:${mutedColor};background:transparent;font-size:11px;font-weight:600;cursor:pointer;">📌 Info</button>
+            </div>
+            <textarea id="${commentTextId}" placeholder="Kommentar (optional, max. 300 Zeichen)" maxlength="300" rows="2" style="width:100%;padding:8px;border:1px solid ${borderColor};border-radius:8px;font-size:12px;background:${isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.04)"};color:${textColor};resize:none;box-sizing:border-box;outline:none;"></textarea>
+            <div id="${commentStatusId}" style="font-size:11px;margin-top:4px;color:${mutedColor};min-height:16px;"></div>
+          </div>
+        </div>`;
 
       const html = `<div style="
-        background:rgba(8,8,18,0.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-        border:1px solid rgba(255,255,255,0.13);border-radius:18px;padding:18px;color:#fff;
-        font-family:system-ui,sans-serif;min-width:300px;max-width:340px;
-        box-shadow:0 16px 60px rgba(0,0,0,0.8),0 0 0 1px rgba(255,255,255,0.05);">
+        background:${bgColor};backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+        border:1px solid ${borderColor};border-radius:20px;padding:20px;color:${textColor};
+        font-family:system-ui,sans-serif;min-width:380px;max-width:460px;
+        box-shadow:0 16px 60px ${shadowColor};">
 
-        <div style="font-weight:800;font-size:15px;margin-bottom:3px;line-height:1.3;">${found.AddressInfo.Title}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">${[found.AddressInfo.AddressLine1,found.AddressInfo.Postcode,found.AddressInfo.Town].filter(Boolean).join(", ")}</div>
+        <div style="font-weight:800;font-size:16px;margin-bottom:3px;line-height:1.3;color:${textColor};">${found.AddressInfo.Title}</div>
+        <div style="font-size:12px;color:${mutedColor};margin-bottom:12px;">${[found.AddressInfo.AddressLine1,found.AddressInfo.Postcode,found.AddressInfo.Town].filter(Boolean).join(", ")}</div>
 
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
           ${statusBadge}
-          ${kw > 0 ? `<span style="font-size:13px;font-weight:800;color:${col};">⚡ ${kw} kW</span><span style="font-size:10px;opacity:0.55;">${powerLabel}</span>` : ""}
+          ${kw > 0 ? `<span style="font-size:14px;font-weight:800;color:${col};">⚡ ${kw} kW</span><span style="font-size:11px;color:${subduedColor};">&nbsp;${powerLabel}</span>` : ""}
         </div>
 
-        ${found.NumberOfPoints ? `<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:8px;">🔌 ${found.NumberOfPoints} Ladepunkt${(found.NumberOfPoints ?? 0) > 1 ? "e" : ""}</div>` : ""}
+        ${found.NumberOfPoints ? `<div style="font-size:12px;color:${mutedColor};margin-bottom:10px;">🔌 ${found.NumberOfPoints} Ladepunkt${(found.NumberOfPoints ?? 0) > 1 ? "e" : ""}</div>` : ""}
 
-        ${connRows ? `<div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;margin-bottom:8px;">${connRows}</div>` : ""}
+        ${connRows ? `<div style="border-top:1px solid ${borderColor};padding-top:10px;margin-bottom:10px;">${connRows}</div>` : ""}
 
         <!-- PREISE (async) -->
-        <div id="${priceId}" style="margin-top:2px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);">
-          <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">💰 Preise</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:6px;">
-            <span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.2);border-top-color:#60a5fa;border-radius:50%;animation:lk-spin 0.8s linear infinite;"></span>
+        <div id="${priceId}" style="margin-top:2px;padding:12px;background:${sectionBg};border-radius:12px;border:1px solid ${borderColor};">
+          <div style="font-size:11px;color:${subduedColor};text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">💰 Preise</div>
+          <div style="font-size:12px;color:${subduedColor};display:flex;align-items:center;gap:6px;">
+            <span style="display:inline-block;width:12px;height:12px;border:2px solid ${borderColor};border-top-color:#60a5fa;border-radius:50%;animation:lk-spin 0.8s linear infinite;"></span>
             Preise werden geladen…
           </div>
         </div>
 
         ${hours}${access}
 
-        ${found.OperatorInfo?.Title ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">Betreiber: <span style="color:rgba(255,255,255,0.55);">${found.OperatorInfo.Title}</span>${found.OperatorInfo.WebsiteURL ? ` · <a href="${found.OperatorInfo.WebsiteURL}" target="_blank" rel="noopener" style="color:#60a5fa;">Website</a>` : ""}</div>` : ""}
+        ${found.OperatorInfo?.Title ? `<div style="font-size:11px;color:${subduedColor};margin-top:10px;border-top:1px solid ${borderColor};padding-top:10px;">Betreiber: <span style="color:${mutedColor};">${found.OperatorInfo.Title}</span>${found.OperatorInfo.WebsiteURL ? ` · <a href="${found.OperatorInfo.WebsiteURL}" target="_blank" rel="noopener" style="color:${linkColor};">Website</a>` : ""}</div>` : ""}
 
-        <div style="display:flex;gap:6px;margin-top:10px;">
+        <div style="display:flex;gap:8px;margin-top:12px;">
           ${navBtn}
-          <a href="${chargepriceUrl}" target="_blank" rel="noopener" style="flex:0;white-space:nowrap;display:flex;align-items:center;justify-content:center;padding:9px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#a3e635;font-size:11px;font-weight:700;text-decoration:none;">Alle Tarife →</a>
+          <a href="${chargepriceUrl}" target="_blank" rel="noopener" style="flex:0;white-space:nowrap;display:flex;align-items:center;justify-content:center;padding:11px 12px;background:${sectionBg};border:1px solid ${borderColor};border-radius:12px;color:#a3e635;font-size:12px;font-weight:700;text-decoration:none;">Alle Tarife →</a>
         </div>
+
+        ${commentFormHtml}
       </div>`;
 
       popupRef.current = new maplibregl.Popup({
@@ -599,35 +650,35 @@ export function StationMapGL({
         }) => {
           const el = document.getElementById(priceId);
           if (!el) return;
-          let inner = `<div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">💰 Preise</div>`;
+          let inner = `<div style="font-size:10px;color:${subduedColor};text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">💰 Preise</div>`;
 
           if (data.isFree) {
-            inner += `<div style="font-size:14px;font-weight:800;color:#4ade80;">Kostenlos ✓</div>`;
+            inner += `<div style="font-size:14px;font-weight:800;color:#16a34a;">Kostenlos ✓</div>`;
           } else if (data.lines && data.lines.length > 0) {
             inner += data.lines.map(l =>
               `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;">
-                <span style="font-size:11px;color:rgba(255,255,255,0.55);">${l.label}</span>
-                <span style="font-size:15px;font-weight:900;color:#fbbf24;">${l.amount.toFixed(2)} <span style="font-size:10px;font-weight:500;opacity:0.7;">${l.unit}</span></span>
+                <span style="font-size:12px;color:${mutedColor};">${l.label}</span>
+                <span style="font-size:16px;font-weight:900;color:${priceColor};">${l.amount.toFixed(2)} <span style="font-size:11px;font-weight:500;opacity:0.7;">${l.unit}</span></span>
               </div>`
             ).join("");
             if (data.note) {
-              inner += `<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:5px;border-top:1px solid rgba(255,255,255,0.06);padding-top:5px;">${data.note}</div>`;
+              inner += `<div style="font-size:11px;color:${subduedColor};margin-top:5px;border-top:1px solid ${rowBorder};padding-top:5px;">${data.note}</div>`;
             }
             const srcLabel = data.source === "chargeprice" ? "Chargeprice.app" : data.source === "ocm_parsed" ? "Betreiber (OCM)" : "Schätzung";
-            inner += `<div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px;">Quelle: ${srcLabel}</div>`;
+            inner += `<div style="font-size:10px;color:${subduedColor};margin-top:4px;">Quelle: ${srcLabel}</div>`;
           } else if (data.rawText) {
-            inner += `<div style="font-size:11px;color:rgba(255,255,255,0.65);line-height:1.5;">${data.rawText}</div>`;
+            inner += `<div style="font-size:12px;color:${mutedColor};line-height:1.5;">${data.rawText}</div>`;
           } else {
-            inner += `<div style="font-size:11px;color:rgba(255,255,255,0.3);">Keine Preisdaten verfügbar.</div>`;
+            inner += `<div style="font-size:12px;color:${subduedColor};">Keine Preisdaten verfügbar.</div>`;
             if (data.operatorUrl) {
-              inner += `<a href="${data.operatorUrl}" target="_blank" rel="noopener" style="font-size:11px;color:#60a5fa;display:block;margin-top:4px;">Preise beim Betreiber →</a>`;
+              inner += `<a href="${data.operatorUrl}" target="_blank" rel="noopener" style="font-size:12px;color:${linkColor};display:block;margin-top:4px;">Preise beim Betreiber →</a>`;
             }
           }
           el.innerHTML = inner;
         })
         .catch(() => {
           const el = document.getElementById(priceId);
-          if (el) el.innerHTML = `<div style="font-size:11px;color:rgba(255,255,255,0.3);">Preise nicht verfügbar.</div>`;
+          if (el) el.innerHTML = `<div style="font-size:12px;color:${subduedColor};">Preise nicht verfügbar.</div>`;
         });
     });
 
@@ -679,7 +730,7 @@ export function StationMapGL({
           const imageData = await loadSvgPinImage(getEvPinSvg(type));
           if (!map.hasImage(`ev-pin-${type}`)) map.addImage(`ev-pin-${type}`, imageData, { sdf: false });
         }));
-        map.addLayer({ id: POINT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], layout: { "icon-image": ["get", "pinType"], "icon-size": ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.1, 22, 1.3, 50, 1.56, 150, 1.9], "icon-allow-overlap": true, "icon-anchor": "bottom" } });
+        map.addLayer({ id: POINT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], layout: { "icon-image": ["get", "pinType"], "icon-size": ["interpolate", ["exponential", 1.4], ["zoom"], 9, ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 150, 0.90], 12, ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.90, 150, 1.40], 15, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.40, 150, 2.10], 18, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.90, 150, 2.80]], "icon-allow-overlap": true, "icon-anchor": "bottom" } });
         map.addLayer({ id: HEATMAP_LAYER, type: "heatmap", source: SOURCE_ID, layout: { visibility: showHeatmap ? "visible" : "none" }, paint: { "heatmap-weight": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0, 350, 1], "heatmap-intensity": 1, "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,255,0)", 0.5, "royalblue", 1, "red"], "heatmap-radius": 20, "heatmap-opacity": 0.6 } });
       }
       // Re-add route source/layers after style change
@@ -907,6 +958,41 @@ export function StationMapGL({
       }
     };
   }, [onNavigateTo]);
+
+  // --- Register global community comment callback --------------------------
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    type CommentFn = (
+      stationId: string, stationName: string, type: string,
+      text: string, lat: number, lng: number,
+      statusEl: HTMLElement | null,
+    ) => void;
+    (window as Window & { __lkComment?: CommentFn }).__lkComment = async (
+      stationId, stationName, type, text, lat, lng, statusEl,
+    ) => {
+      if (statusEl) statusEl.textContent = "Wird gespeichert…";
+      try {
+        const res = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            stationId, stationName, lat, lng,
+            reportType: type,
+            description: text?.slice(0, 300) ?? "",
+          }),
+        });
+        if (statusEl) {
+          statusEl.textContent = res.ok ? "✓ Danke für dein Feedback!" : "Fehler beim Senden.";
+          statusEl.style.color = res.ok ? "#16a34a" : "#dc2626";
+        }
+      } catch {
+        if (statusEl) { statusEl.textContent = "Netzwerkfehler."; statusEl.style.color = "#dc2626"; }
+      }
+    };
+    return () => {
+      delete (window as Window & { __lkComment?: unknown }).__lkComment;
+    };
+  }, []);
 
   // --- Highlight selected station ------------------------------------------
   useEffect(() => {
