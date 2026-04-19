@@ -394,6 +394,19 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
       setPanelState("hidden");
     }
   }, []);
+  // ── Vehicle type (determines OSRM routing profile) ──────────────────────
+  type VehicleType = "car" | "scooter" | "escooter" | "foot";
+  const [vehicleType, setVehicleType] = useState<VehicleType>("car");
+  const [showVehiclePicker, setShowVehiclePicker] = useState(false);
+
+  const VEHICLE_OPTIONS: { type: VehicleType; emoji: string; label: string; osrm: string }[] = [
+    { type: "car",     emoji: "🚗",  label: "E-Auto",     osrm: "driving" },
+    { type: "scooter", emoji: "🛵",  label: "E-Roller",   osrm: "driving" },
+    { type: "escooter",emoji: "🛴",  label: "E-Scooter",  osrm: "cycling" },
+    { type: "foot",    emoji: "🚶",  label: "Zu Fuß",     osrm: "foot"    },
+  ];
+  const osrmProfile = VEHICLE_OPTIONS.find((v) => v.type === vehicleType)?.osrm ?? "driving";
+
   const [from, setFrom] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [to, setTo] = useState({ label: "", lat: null as number | null, lng: null as number | null });
   const [loading, setLoading] = useState(false);
@@ -429,7 +442,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setRoute(null);
     setLoading(true);
     setCurrentStepIdx(0);
-    const url = `https://router.project-osrm.org/route/v1/driving/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson&steps=true&annotations=true`;
+    const url = `https://router.project-osrm.org/route/v1/${osrmProfile}/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson&steps=true&annotations=true`;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`OSRM ${res.status}`);
@@ -448,7 +461,7 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     } finally {
       setLoading(false);
     }
-  }, [onRoute]);
+  }, [onRoute, osrmProfile]);
 
   const handlePlanStops = useCallback(async (r: OsrmRoute) => {
     setPlanningStops(true);
@@ -813,6 +826,25 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
             {/* Inputs (hidden during nav) */}
             {!isNavActive && (
               <div className="p-3 space-y-2 border-b border-zinc-100 dark:border-zinc-800">
+                {/* Vehicle type selector */}
+                <div className="flex items-center gap-1.5">
+                  {VEHICLE_OPTIONS.map((v) => (
+                    <button
+                      key={v.type}
+                      type="button"
+                      onClick={() => setVehicleType(v.type)}
+                      title={v.label}
+                      className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-xl border text-[10px] font-semibold transition-colors ${
+                        vehicleType === v.type
+                          ? "bg-green-600 border-green-600 text-white"
+                          : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-green-400"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{v.emoji}</span>
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
                 <GeoInput placeholder="Startadresse…" icon={<MapPin size={13} className="text-green-500" />} value={from.label} onChange={(l, lat, lng) => setFrom({ label: l, lat, lng })} />
                 <div className="flex justify-center py-0.5"><div className="w-px h-3 bg-zinc-200 dark:bg-zinc-700" /></div>
                 <GeoInput placeholder="Zieladresse…" icon={<MapPin size={13} className="text-red-500" />} value={to.label} onChange={(l, lat, lng) => setTo({ label: l, lat, lng })} />

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import {
   Save, Loader2, Eye, EyeOff, Download, AlertTriangle,
-  Bell, MapPin, Zap, User, Lock,
+  Bell, MapPin, Zap, User, Lock, Map,
 } from "lucide-react";
 
 function Msg({ msgs, k }: { msgs: Record<string, string>; k: string }) {
@@ -77,6 +77,152 @@ const CONNECTOR_LABELS: Record<string, string> = {
 
 const inputCls =
   "w-full rounded-xl border border-(--border) bg-(--bg-elevated) px-3 py-2 text-sm text-(--text-base) focus:outline-none focus:ring-2 focus:ring-(--primary)";
+
+// ─── Map Preferences Section ─────────────────────────────────────────────────
+
+type MapStyleKey = "light" | "dark" | "bright" | "standard";
+const MAP_STYLE_OPTIONS: { key: MapStyleKey; label: string; emoji: string }[] = [
+  { key: "light",    label: "Hell",     emoji: "☀️" },
+  { key: "dark",     label: "Dunkel",   emoji: "🌙" },
+  { key: "bright",   label: "Farbig",   emoji: "🗺️" },
+  { key: "standard", label: "Standard", emoji: "🏙️" },
+];
+const POWER_OPTS = [
+  { value: null,  label: "Alle" },
+  { value: "ac",  label: "AC ≤22kW" },
+  { value: "dc",  label: "DC 22–150kW" },
+  { value: "hpc", label: "HPC ≥150kW" },
+] as const;
+const CONNECTOR_OPTS = [
+  { value: null,        label: "Alle" },
+  { value: "type2",     label: "Type 2" },
+  { value: "ccs",       label: "CCS2" },
+  { value: "chademo",   label: "CHAdeMO" },
+  { value: "tesla_ccs", label: "Tesla CCS" },
+] as const;
+const MAP_PREFS_KEY = "lk-map-prefs";
+
+function loadPrefs() {
+  if (typeof window === "undefined") return null;
+  try { return JSON.parse(localStorage.getItem(MAP_PREFS_KEY) ?? "{}"); } catch { return {}; }
+}
+
+function MapPrefsSection() {
+  const [prefs, setPrefs] = useState<Record<string, unknown>>({});
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { setPrefs(loadPrefs() ?? {}); }, []);
+
+  function update(key: string, value: unknown) {
+    const next = { ...prefs, [key]: value };
+    setPrefs(next);
+    try { localStorage.setItem(MAP_PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const style = (prefs.mapStyle as MapStyleKey) ?? "light";
+  const power = (prefs.powerLevel as string | null) ?? null;
+  const connector = (prefs.connectorType as string | null) ?? null;
+  const heatmap = Boolean(prefs.showHeatmap);
+  const show3D = Boolean(prefs.show3D);
+  const liveFeed = prefs.showLiveFeed !== false;
+
+  return (
+    <section className="bg-(--bg-surface) border border-(--border) rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Map size={16} className="text-(--primary)" />
+        <h2 className="text-sm font-bold text-(--text-base)">Karten-Einstellungen</h2>
+        {saved && <span className="ml-auto text-xs text-green-500 font-semibold">Gespeichert ✓</span>}
+      </div>
+      <div className="space-y-4">
+        {/* Map style */}
+        <div>
+          <label className="block text-xs font-medium text-(--text-muted) mb-2">Standard-Kartenstil</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {MAP_STYLE_OPTIONS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => update("mapStyle", s.key)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
+                  style === s.key
+                    ? "bg-(--primary-light-soft) border-(--primary) text-(--primary)"
+                    : "border-(--border) text-(--text-muted) hover:border-(--primary)"
+                }`}
+              >
+                <span>{s.emoji}</span>{s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Default power filter */}
+        <div>
+          <label className="block text-xs font-medium text-(--text-muted) mb-2">Standard-Leistungsfilter</label>
+          <div className="flex flex-wrap gap-1.5">
+            {POWER_OPTS.map((o) => (
+              <button
+                key={String(o.value)}
+                type="button"
+                onClick={() => update("powerLevel", o.value)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                  power === o.value
+                    ? "bg-green-600 border-green-600 text-white"
+                    : "border-(--border) text-(--text-muted) hover:border-green-500"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Default connector filter */}
+        <div>
+          <label className="block text-xs font-medium text-(--text-muted) mb-2">Standard-Steckertyp</label>
+          <div className="flex flex-wrap gap-1.5">
+            {CONNECTOR_OPTS.map((o) => (
+              <button
+                key={String(o.value)}
+                type="button"
+                onClick={() => update("connectorType", o.value)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                  connector === o.value
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-(--border) text-(--text-muted) hover:border-blue-500"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Toggles */}
+        <div className="space-y-3">
+          {([
+            ["showLiveFeed", liveFeed,  "Live-Feed anzeigen",    "Günstige Stationen in der Nähe als Karten-Overlay"],
+            ["showHeatmap",  heatmap,   "Heatmap anzeigen",      "Ladepunkt-Dichte als Wärmebild auf der Karte"],
+            ["show3D",       show3D,    "3D-Gebäude anzeigen",   "Gebäude im 3D-Modus bei hohem Zoom"],
+          ] as [string, boolean, string, string][]).map(([key, val, label, desc]) => (
+            <label key={key} className="flex items-start gap-3 cursor-pointer">
+              <div className="relative mt-0.5 shrink-0">
+                <input type="checkbox" className="sr-only" checked={val} onChange={(e) => update(key, e.target.checked)} />
+                <div className={`relative w-10 h-5 rounded-full transition-colors ${val ? "bg-(--primary)" : "bg-(--bg-elevated) border border-(--border)"}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-[left] duration-150 ${val ? "left-5" : "left-0.5"}`} />
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-(--text-base)">{label}</p>
+                <p className="text-xs text-(--text-muted)">{desc}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Main Settings Form ───────────────────────────────────────────────────────
 
 export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
   const t = useTranslations("settings");
@@ -387,7 +533,10 @@ export function SettingsForm({ initialProfile, userEmail }: SettingsFormProps) {
         </div>
       </section>
 
-      {/* 6. DSGVO & Konto */}
+      {/* 6. Karten-Einstellungen (localStorage) */}
+      <MapPrefsSection />
+
+      {/* 7. DSGVO & Konto */}
       <section className="bg-(--bg-surface) border border-(--border) rounded-2xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <Download size={16} className="text-(--primary)" />

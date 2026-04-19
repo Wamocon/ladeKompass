@@ -412,11 +412,16 @@ export function NearbyFeed() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ lat: String(lat), lng: String(lng), distance: String(r), maxResults: "120" });
+      // Always request a generous area from OCM (API returns ~120 max), then
+      // filter client-side to the exact selected radius so the count is accurate.
+      const fetchRadius = Math.min(r * 1.5, 150); // slightly wider net
+      const params = new URLSearchParams({ lat: String(lat), lng: String(lng), distance: String(fetchRadius), maxResults: "200" });
       const res = await fetch(`/api/stations?${params}`, { signal: abortRef.current.signal });
       if (!res.ok) throw new Error("Fehler beim Laden");
       const data: OCMStation[] = await res.json();
-      setStations(data.map((s) => toCard(s, lat, lng)));
+      // Client-side filter: only stations within the selected radius
+      const filtered = data.filter((s) => haversineKm(lat, lng, s.AddressInfo.Latitude, s.AddressInfo.Longitude) <= r);
+      setStations(filtered.map((s) => toCard(s, lat, lng)));
     } catch (e) {
       if (e instanceof Error && e.name !== "AbortError") setError("Stationen konnten nicht geladen werden.");
     } finally {

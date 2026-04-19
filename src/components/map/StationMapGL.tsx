@@ -15,26 +15,33 @@ import {
 
 // ─── Canvas-based SVG → ImageData ─────────────────────────────────────────────
 // MapLibre GL v5 uses fetch() internally for loadImage(), which cannot decode
-// SVG data: URLs. Converting SVG via an off-screen canvas produces raw ImageData
-// that MapLibre can consume directly via map.addImage().
-function loadSvgPinImage(
-  svgString: string,
-  width = 36,
-  height = 46,
-): Promise<ImageData> {
+// SVG data: URLs. We render at 4× resolution so MapLibre can use pixelRatio:4,
+// keeping icons crisp at all zoom levels without any rasterisation blur.
+const PIN_PIXEL_RATIO = 4;
+const PIN_LOGICAL_W   = 36;
+const PIN_LOGICAL_H   = 46;
+
+function loadSvgPinImage(svgString: string): Promise<ImageData> {
+  const physW = PIN_LOGICAL_W * PIN_PIXEL_RATIO;
+  const physH = PIN_LOGICAL_H * PIN_PIXEL_RATIO;
   return new Promise((resolve, reject) => {
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width  = physW;
+    canvas.height = physH;
     const ctx = canvas.getContext("2d");
     if (!ctx) { reject(new Error("Canvas 2D not available")); return; }
-    const img = new Image(width, height);
+    const img = new Image(physW, physH);
     img.onload = () => {
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(ctx.getImageData(0, 0, width, height));
+      ctx.drawImage(img, 0, 0, physW, physH);
+      resolve(ctx.getImageData(0, 0, physW, physH));
     };
     img.onerror = () => reject(new Error("SVG pin render failed"));
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+    // Embed explicit width/height in the SVG so the browser renders at full size
+    const sized = svgString.replace(
+      /(<svg[^>]*)\bwidth="[^"]*"\s*height="[^"]*"/,
+      `$1width="${physW}" height="${physH}"`,
+    );
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sized)}`;
   });
 }
 
@@ -185,6 +192,8 @@ export interface StationMapGLProps {
   routeGeoJSON?: GeoJSON.FeatureCollection | null;
   /** Live nav position [lat, lng, bearing-degrees]. When set, map follows + shows arrow. */
   navPosition?: [number, number, number] | null;
+  /** Device compass/GPS heading in degrees (0=North). Used to rotate the user location dot. */
+  userHeading?: number | null;
   /** Called when user clicks Navigate-to-station in popup */
   onNavigateTo?: (lat: number, lng: number, label: string) => void;
   /** Planned charging stops along the current route */
@@ -212,6 +221,7 @@ export function StationMapGL({
   selectedStation,
   routeGeoJSON,
   navPosition,
+  userHeading,
   onNavigateTo,
   chargingStops,
 }: StationMapGLProps) {
@@ -314,7 +324,7 @@ export function StationMapGL({
       const type = e.id.replace("ev-pin-", "") as PinType;
       if (!ALL_PIN_TYPES.includes(type)) return;
       void loadSvgPinImage(getEvPinSvg(type)).then((imageData) => {
-        if (!map.hasImage(e.id)) map.addImage(e.id, imageData, { sdf: false });
+        if (!map.hasImage(e.id)) map.addImage(e.id, imageData, { pixelRatio: PIN_PIXEL_RATIO, sdf: false });
       }).catch(() => { /* ignore individual render failures */ });
     });
 
@@ -579,9 +589,9 @@ export function StationMapGL({
 
       const html = `<div style="
         background:${bgColor};backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-        border:1px solid ${borderColor};border-radius:20px;padding:20px;color:${textColor};
-        font-family:system-ui,sans-serif;min-width:380px;max-width:460px;
-        box-shadow:0 16px 60px ${shadowColor};">
+        border:1px solid ${borderColor};border-radius:20px;padding:24px;color:${textColor};
+        font-family:system-ui,sans-serif;min-width:min(580px,90vw);max-width:min(680px,94vw);
+        box-shadow:0 24px 80px ${shadowColor};">
 
         <div style="font-weight:800;font-size:16px;margin-bottom:3px;line-height:1.3;color:${textColor};">${found.AddressInfo.Title}</div>
         <div style="font-size:12px;color:${mutedColor};margin-bottom:12px;">${[found.AddressInfo.AddressLine1,found.AddressInfo.Postcode,found.AddressInfo.Town].filter(Boolean).join(", ")}</div>
@@ -731,7 +741,7 @@ export function StationMapGL({
         // Reload pin images after style change (canvas-based approach)
         void Promise.allSettled(ALL_PIN_TYPES.map(async (type) => {
           const imageData = await loadSvgPinImage(getEvPinSvg(type));
-          if (!map.hasImage(`ev-pin-${type}`)) map.addImage(`ev-pin-${type}`, imageData, { sdf: false });
+          if (!map.hasImage(`ev-pin-${type}`)) map.addImage(`ev-pin-${type}`, imageData, { pixelRatio: PIN_PIXEL_RATIO, sdf: false });
         }));
         map.addLayer({ id: POINT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["!", ["has", "point_count"]], layout: { "icon-image": ["get", "pinType"], "icon-size": ["interpolate", ["exponential", 1.4], ["zoom"], 9, ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 150, 0.90], 12, ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.90, 150, 1.40], 15, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.40, 150, 2.10], 18, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.90, 150, 2.80]], "icon-allow-overlap": true, "icon-anchor": "bottom" } });
         map.addLayer({ id: HEATMAP_LAYER, type: "heatmap", source: SOURCE_ID, layout: { visibility: showHeatmap ? "visible" : "none" }, paint: { "heatmap-weight": ["interpolate", ["linear"], ["get", "maxKw"], 0, 0, 350, 1], "heatmap-intensity": 1, "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,255,0)", 0.5, "royalblue", 1, "red"], "heatmap-radius": 20, "heatmap-opacity": 0.6 } });
@@ -825,16 +835,40 @@ export function StationMapGL({
     if (markerRef.current) markerRef.current.remove();
     if (!userLocation) return;
     const [lat, lng] = userLocation;
-    // Outer wrapper for the pulsing ring (uses CSS animation injected once)
-    const outer = document.createElement("div");
-    outer.className = "user-location-outer";
-    const inner = document.createElement("div");
-    inner.className = "user-location-dot";
-    outer.appendChild(inner);
-    markerRef.current = new maplibregl.Marker({ element: outer })
-      .setLngLat([lng, lat])
-      .addTo(map);
-  }, [userLocation]);
+
+    const hasHeading = userHeading !== null && userHeading !== undefined && Number.isFinite(userHeading);
+
+    if (hasHeading) {
+      // Directional arrow marker — shows which way the user is facing/travelling
+      const arrow = document.createElement("div");
+      arrow.className = "user-location-outer";
+      arrow.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+          <!-- Accuracy ring -->
+          <circle cx="14" cy="14" r="13" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.4)" stroke-width="1"/>
+          <!-- Directional cone -->
+          <path d="M14 2 L19 14 L14 11 L9 14 Z" fill="#3b82f6" opacity="0.7"/>
+          <!-- Centre dot -->
+          <circle cx="14" cy="14" r="5" fill="#3b82f6" stroke="white" stroke-width="2"/>
+        </svg>`;
+      arrow.style.transform = `rotate(${userHeading}deg)`;
+      arrow.style.transformOrigin = "center";
+      markerRef.current = new maplibregl.Marker({ element: arrow, rotationAlignment: "map" })
+        .setRotation(userHeading!)
+        .setLngLat([lng, lat])
+        .addTo(map);
+    } else {
+      // Fallback: pulsing dot when heading is unknown
+      const outer = document.createElement("div");
+      outer.className = "user-location-outer";
+      const inner = document.createElement("div");
+      inner.className = "user-location-dot";
+      outer.appendChild(inner);
+      markerRef.current = new maplibregl.Marker({ element: outer })
+        .setLngLat([lng, lat])
+        .addTo(map);
+    }
+  }, [userLocation, userHeading]);
 
   // --- Re-fetch when filters change ----------------------------------------
   useEffect(() => {
