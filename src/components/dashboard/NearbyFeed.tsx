@@ -132,19 +132,15 @@ function ExpandableStationRow({
   const router = useRouter();
 
   function handleNavigate() {
-    // Security: do NOT call getCurrentPosition here and store GPS coords in
-    // localStorage — that would be "clear text storage of sensitive information".
-    // Instead, store fromCoord: null so NavigationWizard resolves the live GPS
-    // position itself (only in memory, never persisted).
+    // Security: avoid persisting any coordinates in localStorage/sessionStorage.
+    // Pass only non-sensitive labels in the URL; the map page can resolve
+    // the live origin in-memory when needed.
     const dest = `/${toSafeLocale(locale)}/map`;
-    const preset = {
+    const params = new URLSearchParams({
       fromLabel: "Aktueller Standort",
       toLabel: s.title,
-      fromCoord: null,
-      toCoord: [s.lat, s.lng],
-    };
-    try { localStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
-    router.push(dest);
+    });
+    router.push(`${dest}?${params.toString()}`);
   }
 
   const statusColor =
