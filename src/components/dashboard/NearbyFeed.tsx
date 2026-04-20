@@ -132,30 +132,19 @@ function ExpandableStationRow({
   const router = useRouter();
 
   function handleNavigate() {
+    // Security: do NOT call getCurrentPosition here and store GPS coords in
+    // localStorage — that would be "clear text storage of sensitive information".
+    // Instead, store fromCoord: null so NavigationWizard resolves the live GPS
+    // position itself (only in memory, never persisted).
     const dest = `/${toSafeLocale(locale)}/map`;
-    function goWithPreset(fromLat: number, fromLng: number, fromLabel: string) {
-      const preset = {
-        fromLabel,
-        toLabel: s.title,
-        fromCoord: [fromLat, fromLng],
-        toCoord: [s.lat, s.lng],
-      };
-      try { localStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
-      router.push(dest);
-    }
-    try {
-      if (typeof window !== "undefined" && navigator?.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => goWithPreset(pos.coords.latitude, pos.coords.longitude, "Aktueller Standort"),
-          () => goWithPreset(s.lat + 0.01, s.lng + 0.01, s.town),
-          { timeout: 5000, enableHighAccuracy: true },
-        );
-      } else {
-        router.push(dest);
-      }
-    } catch {
-      router.push(dest);
-    }
+    const preset = {
+      fromLabel: "Aktueller Standort",
+      toLabel: s.title,
+      fromCoord: null,
+      toCoord: [s.lat, s.lng],
+    };
+    try { localStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
+    router.push(dest);
   }
 
   const statusColor =

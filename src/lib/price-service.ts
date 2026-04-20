@@ -248,9 +248,9 @@ export async function fetchChargepriceData(
           cheapestCurrency = attr.currency ?? "EUR";
           // Estimate per-kwh from price distribution
           const dist = cp.price_distribution ?? {};
-          cheapestKwh = dist.kwh != null && total < Infinity ? +(total * dist.kwh / 30).toFixed(4) : null;
-          cheapestMin = dist.minute != null && total < Infinity ? +(total * dist.minute / 45).toFixed(4) : null;
-          cheapestSession = dist.session != null && total < Infinity ? +(total * dist.session).toFixed(2) : null;
+          cheapestKwh = dist.kwh != null ? +(total * dist.kwh / 30).toFixed(4) : null;
+          cheapestMin = dist.minute != null ? +(total * dist.minute / 45).toFixed(4) : null;
+          cheapestSession = dist.session != null ? +(total * dist.session).toFixed(2) : null;
         }
       }
     }
@@ -320,7 +320,6 @@ export async function getPriceData(
   const cp = await fetchChargepriceData(ocmUUID, lat, lng, operatorTitle, connections);
   if (cp) {
     cp.operatorUrl = getOperatorUrl(operatorTitle);
-    cp.chargepriceUrl = cp.chargepriceUrl ?? `https://www.chargeprice.app/?q=${encodeURIComponent(operatorTitle ?? "")}`;
     return cp;
   }
 

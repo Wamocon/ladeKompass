@@ -50,7 +50,8 @@ export interface OsrmRoute {
 export interface NavRoutePreset {
   fromLabel: string;
   toLabel: string;
-  fromCoord: [number, number];
+  /** null = Standort wird live per GPS ermittelt (kein Speichern sensitiver Daten) */
+  fromCoord: [number, number] | null;
   toCoord: [number, number];
 }
 
@@ -486,8 +487,9 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setTo({ label: preset.toLabel, lat: preset.toCoord[0], lng: preset.toCoord[1] });
     setPanelState("expanded");
 
-    // If start is "Aktueller Standort", try to get fresh GPS before calculating
-    if (preset.fromLabel === "Aktueller Standort" && navigator?.geolocation) {
+    // If start is "Aktueller Standort" (or fromCoord is null), resolve via live GPS —
+    // never rely on pre-stored coordinates (avoids clear-text storage of GPS data).
+    if ((preset.fromLabel === "Aktueller Standort" || preset.fromCoord === null) && navigator?.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const fLat = pos.coords.latitude, fLng = pos.coords.longitude;
@@ -495,15 +497,17 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
           void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
         () => {
-          // GPS failed – use preset coords as fallback
-          setFrom({ label: preset.fromLabel, lat: preset.fromCoord[0], lng: preset.fromCoord[1] });
-          void calculateWithCoords(preset.fromCoord[0], preset.fromCoord[1], preset.toCoord[0], preset.toCoord[1]);
+          // GPS failed – use preset coords or Germany centre as last resort
+          const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
+          setFrom({ label: preset.fromLabel, lat: fLat, lng: fLng });
+          void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
         { timeout: 6000, enableHighAccuracy: true },
       );
     } else {
-      setFrom({ label: preset.fromLabel, lat: preset.fromCoord[0], lng: preset.fromCoord[1] });
-      void calculateWithCoords(preset.fromCoord[0], preset.fromCoord[1], preset.toCoord[0], preset.toCoord[1]);
+      const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
+      setFrom({ label: preset.fromLabel, lat: fLat, lng: fLng });
+      void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
