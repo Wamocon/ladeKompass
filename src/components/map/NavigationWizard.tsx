@@ -284,6 +284,7 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
 
   function handleChange(val: string) {
     setQuery(val);
+    setLocError(null); // Fehlermeldung beim Tippen automatisch ausblenden
     onChange(val, null, null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (val.length < 3) { setResults([]); setOpen(false); return; }
@@ -336,42 +337,52 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
           disabled={locating}
           onClick={() => {
             if (!navigator?.geolocation) {
-              setLocError("GPS nicht verfügbar.");
+              setLocError("GPS/Standort nicht verfügbar in diesem Browser.");
               return;
             }
             setLocating(true);
             setLocError(null);
-            navigator.geolocation.getCurrentPosition(
-              async (pos) => {
-                const { latitude: lat, longitude: lon } = pos.coords;
-                try {
-                  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-                  const data: unknown = await res.json();
-                  // Validate: display_name must be a non-empty string.
-                  // Strip HTML-significant chars to prevent UI injection.
-                  const raw = (data as Record<string, unknown>)?.display_name;
-                  const label =
-                    typeof raw === "string" && raw.length > 0
-                      ? raw.split(",").slice(0, 2).join(",").replace(/[<>'"&]/g, "").trim().slice(0, 200)
-                      : "Mein Standort";
-                  setQuery(label);
-                  onChange(label, lat, lon);
-                } catch {
-                  setQuery("Mein Standort");
-                  onChange("Mein Standort", lat, lon);
-                } finally {
-                  setLocating(false);
-                }
-              },
-              (err) => {
+
+            // Hilfsfunktion: Reverse-Geocode + Input setzen
+            const applyPosition = async (lat: number, lon: number) => {
+              try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+                const data: unknown = await res.json();
+                const raw = (data as Record<string, unknown>)?.display_name;
+                const label =
+                  typeof raw === "string" && raw.length > 0
+                    ? raw.split(",").slice(0, 2).join(",").replace(/[<>'"&]/g, "").trim().slice(0, 200)
+                    : "Mein Standort";
+                setQuery(label);
+                onChange(label, lat, lon);
+              } catch {
+                setQuery("Mein Standort");
+                onChange("Mein Standort", lat, lon);
+              } finally {
                 setLocating(false);
-                if (err.code === err.PERMISSION_DENIED) {
-                  setLocError("Standortzugriff verweigert.");
-                } else {
-                  setLocError("Standort nicht verfügbar.");
-                }
+              }
+            };
+
+            // Erst ohne High-Accuracy (klappt auf Desktop via WLAN/IP),
+            // bei Fehler erneut mit High-Accuracy versuchen (für Mobilgeräte mit GPS)
+            navigator.geolocation.getCurrentPosition(
+              (pos) => void applyPosition(pos.coords.latitude, pos.coords.longitude),
+              () => {
+                // Erster Versuch (IP/WLAN) schlug fehl – nochmal mit GPS
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => void applyPosition(pos.coords.latitude, pos.coords.longitude),
+                  (err) => {
+                    setLocating(false);
+                    if (err.code === err.PERMISSION_DENIED) {
+                      setLocError("Standortzugriff verweigert – bitte in Browser-Einstellungen erlauben.");
+                    } else {
+                      setLocError("Standort nicht ermittelbar. Bitte Adresse manuell eingeben.");
+                    }
+                  },
+                  { timeout: 10000, enableHighAccuracy: true },
+                );
               },
-              { timeout: 8000, enableHighAccuracy: true },
+              { timeout: 5000, enableHighAccuracy: false },
             );
           }}
           className={`shrink-0 transition-colors ${
@@ -382,9 +393,17 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
         </button>
       </div>
       {locError && (
-        <span className="block mt-1 text-[10px] text-red-400 px-1">
-          {locError}
-        </span>
+        <div className="flex items-center gap-1.5 mt-1 px-1">
+          <span className="text-[10px] text-red-400 flex-1">{locError}</span>
+          <button
+            type="button"
+            onClick={() => setLocError(null)}
+            className="text-red-300 hover:text-red-500 transition-colors shrink-0"
+            aria-label="Fehlermeldung schließen"
+          >
+            <X size={10} />
+          </button>
+        </div>
       )}
       {open && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 z-[900] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
