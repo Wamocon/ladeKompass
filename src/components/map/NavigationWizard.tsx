@@ -412,11 +412,12 @@ type PanelState = "expanded" | "collapsed" | "hidden";
 export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, onNavStop, onChargingStops, onNavActiveChange }: NavigationWizardProps) {
   const [panelState, setPanelState] = useState<PanelState>("expanded");
 
-  // On mobile, start collapsed to avoid covering the map
+  // On mobile, start collapsed only when there is no preset to immediately show
   useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
+    if (typeof window !== "undefined" && window.innerWidth < 768 && !preset) {
       setPanelState("hidden");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // ── Vehicle type (determines OSRM routing profile) ──────────────────────
   type VehicleType = "car" | "scooter" | "escooter" | "foot";
@@ -513,6 +514,8 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     // If start is "Aktueller Standort" (or fromCoord is null), resolve via live GPS —
     // never rely on pre-stored coordinates (avoids clear-text storage of GPS data).
     if ((preset.fromLabel === "Aktueller Standort" || preset.fromCoord === null) && navigator?.geolocation) {
+      // Show loading immediately so the panel stays visible while GPS resolves
+      setLoading(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const fLat = pos.coords.latitude, fLng = pos.coords.longitude;
@@ -520,12 +523,12 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
           void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
         () => {
-          // GPS failed – use preset coords or Germany centre as last resort
+          // GPS failed – use Germany centre as last resort
           const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
           setFrom({ label: preset.fromLabel, lat: fLat, lng: fLng });
           void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
-        { timeout: 6000, enableHighAccuracy: true },
+        { timeout: 10000, enableHighAccuracy: true },
       );
     } else {
       const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
