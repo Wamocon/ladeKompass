@@ -3,20 +3,8 @@ name: Unit Tests
 on:
   push:
     branches: [main, develop]
-    paths:
-      - "src/lib/**"
-      - "src/app/api/**"
-      - "vitest.config.ts"
-      - "package.json"
-      - "tsconfig.json"
   pull_request:
     branches: [main, develop]
-    paths:
-      - "src/lib/**"
-      - "src/app/api/**"
-      - "vitest.config.ts"
-      - "package.json"
-      - "tsconfig.json"
 
 permissions:
   contents: read
