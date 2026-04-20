@@ -360,7 +360,8 @@ export function RoutePlanner() {
                     fromCoord: [inp.startLat, inp.startLng],
                     toCoord: [inp.endLat, inp.endLng],
                   };
-                  localStorage.setItem("lk_nav_preset", JSON.stringify(preset));
+                  // sessionStorage: flüchtig (Tab-Session), kein CWE-312 persistent storage
+                  sessionStorage.setItem("lk_nav_preset", JSON.stringify(preset));
                   window.location.href = `/${window.location.pathname.split("/")[1]}/map`;
                 }}
                 className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"

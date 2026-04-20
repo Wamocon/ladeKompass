@@ -132,39 +132,19 @@ function ExpandableStationRow({
   const router = useRouter();
 
   function handleNavigate() {
-    // Build the navigation URL using the validated locale allowlist.
-    // Use Next.js router.push() — not window.location.href — so CodeQL's
-    // open-redirect taint analysis does not flag this as a sink.
-    const dest = `/${toSafeLocale(locale)}/map`;
-    try {
-      if (typeof window !== "undefined" && navigator?.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const preset = {
-              fromLabel: "Aktueller Standort",
-              toLabel: s.title,
-              fromCoord: [pos.coords.latitude, pos.coords.longitude],
-              toCoord: [s.lat, s.lng],
-            };
-            router.push(`${dest}?preset=${encodeURIComponent(JSON.stringify(preset))}`);
-          },
-          () => {
-            const preset = {
-              fromLabel: s.town,
-              toLabel: s.title,
-              fromCoord: [s.lat + 0.01, s.lng + 0.01],
-              toCoord: [s.lat, s.lng],
-            };
-            router.push(`${dest}?preset=${encodeURIComponent(JSON.stringify(preset))}`);
-          },
-          { timeout: 5000 },
-        );
-      } else {
-        router.push(dest);
-      }
-    } catch {
-      router.push(dest);
-    }
+    // Security: Nutzer-GPS wird nicht persistiert; Zielkoordinaten werden nur transient über die URL übergeben.
+    const params = new URLSearchParams({
+      toLat: String(s.lat),
+      toLng: String(s.lng),
+    });
+    const dest = `/${toSafeLocale(locale)}/map?${params.toString()}`;
+    const preset = {
+      fromLabel: "Aktueller Standort",
+      toLabel: s.title,
+      fromCoord: null,
+    };
+    try { sessionStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
+    router.push(dest);
   }
 
   const statusColor =
@@ -412,10 +392,10 @@ export function NearbyFeed() {
     setLoading(true);
     setError(null);
     try {
-      // Always request a generous area from OCM (API returns ~120 max), then
-      // filter client-side to the exact selected radius so the count is accurate.
-      const fetchRadius = Math.min(r * 1.5, 150); // slightly wider net
-      const params = new URLSearchParams({ lat: String(lat), lng: String(lng), distance: String(fetchRadius), maxResults: "200" });
+      // Scale maxResults with radius so larger radii return more stations.
+      // OCM hard-cap is 500. We scale: 10km→150, 25km→250, 50km→400, 100km→500
+      const maxResults = r <= 10 ? 150 : r <= 25 ? 250 : r <= 50 ? 400 : 500;
+      const params = new URLSearchParams({ lat: String(lat), lng: String(lng), distance: String(r), maxResults: String(maxResults) });
       const res = await fetch(`/api/stations?${params}`, { signal: abortRef.current.signal });
       if (!res.ok) throw new Error("Fehler beim Laden");
       const data: OCMStation[] = await res.json();

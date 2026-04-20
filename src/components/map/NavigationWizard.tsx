@@ -50,7 +50,8 @@ export interface OsrmRoute {
 export interface NavRoutePreset {
   fromLabel: string;
   toLabel: string;
-  fromCoord: [number, number];
+  /** null = Standort wird live per GPS ermittelt (kein Speichern sensitiver Daten) */
+  fromCoord: [number, number] | null;
   toCoord: [number, number];
 }
 
@@ -266,6 +267,8 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -330,17 +333,22 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
         <button
           type="button"
           title="Aktuellen Standort verwenden"
+          disabled={locating}
           onClick={() => {
-            if (!navigator.geolocation) return;
+            if (!navigator?.geolocation) {
+              setLocError("GPS nicht verfügbar.");
+              return;
+            }
+            setLocating(true);
+            setLocError(null);
             navigator.geolocation.getCurrentPosition(
               async (pos) => {
                 const { latitude: lat, longitude: lon } = pos.coords;
                 try {
                   const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
                   const data: unknown = await res.json();
-                  // Validate the response: display_name must be a non-empty string.
-                  // Sanitise by stripping HTML-significant characters and capping length
-                  // to prevent any server-side tampering from affecting the UI.
+                  // Validate: display_name must be a non-empty string.
+                  // Strip HTML-significant chars to prevent UI injection.
                   const raw = (data as Record<string, unknown>)?.display_name;
                   const label =
                     typeof raw === "string" && raw.length > 0
@@ -351,17 +359,33 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
                 } catch {
                   setQuery("Mein Standort");
                   onChange("Mein Standort", lat, lon);
+                } finally {
+                  setLocating(false);
                 }
               },
-              () => {},
-              { timeout: 6000 },
+              (err) => {
+                setLocating(false);
+                if (err.code === err.PERMISSION_DENIED) {
+                  setLocError("Standortzugriff verweigert.");
+                } else {
+                  setLocError("Standort nicht verfügbar.");
+                }
+              },
+              { timeout: 8000, enableHighAccuracy: true },
             );
           }}
-          className="shrink-0 text-green-500 hover:text-green-400 transition-colors"
+          className={`shrink-0 transition-colors ${
+            locating ? "text-zinc-400 animate-pulse cursor-wait" : "text-green-500 hover:text-green-400"
+          }`}
         >
-          <LocateFixed size={13} />
+          {locating ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
         </button>
       </div>
+      {locError && (
+        <span className="block mt-1 text-[10px] text-red-400 px-1">
+          {locError}
+        </span>
+      )}
       {open && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 z-[900] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
           {results.map((r, i) => (
@@ -486,8 +510,9 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     setTo({ label: preset.toLabel, lat: preset.toCoord[0], lng: preset.toCoord[1] });
     setPanelState("expanded");
 
-    // If start is "Aktueller Standort", try to get fresh GPS before calculating
-    if (preset.fromLabel === "Aktueller Standort" && navigator?.geolocation) {
+    // If start is "Aktueller Standort" (or fromCoord is null), resolve via live GPS —
+    // never rely on pre-stored coordinates (avoids clear-text storage of GPS data).
+    if ((preset.fromLabel === "Aktueller Standort" || preset.fromCoord === null) && navigator?.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const fLat = pos.coords.latitude, fLng = pos.coords.longitude;
@@ -495,15 +520,17 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
           void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
         () => {
-          // GPS failed – use preset coords as fallback
-          setFrom({ label: preset.fromLabel, lat: preset.fromCoord[0], lng: preset.fromCoord[1] });
-          void calculateWithCoords(preset.fromCoord[0], preset.fromCoord[1], preset.toCoord[0], preset.toCoord[1]);
+          // GPS failed – use preset coords or Germany centre as last resort
+          const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
+          setFrom({ label: preset.fromLabel, lat: fLat, lng: fLng });
+          void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
         { timeout: 6000, enableHighAccuracy: true },
       );
     } else {
-      setFrom({ label: preset.fromLabel, lat: preset.fromCoord[0], lng: preset.fromCoord[1] });
-      void calculateWithCoords(preset.fromCoord[0], preset.fromCoord[1], preset.toCoord[0], preset.toCoord[1]);
+      const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
+      setFrom({ label: preset.fromLabel, lat: fLat, lng: fLng });
+      void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
