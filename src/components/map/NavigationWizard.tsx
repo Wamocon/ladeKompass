@@ -284,6 +284,7 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
 
   function handleChange(val: string) {
     setQuery(val);
+    setLocError(null); // Fehlermeldung beim Tippen automatisch ausblenden
     onChange(val, null, null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (val.length < 3) { setResults([]); setOpen(false); return; }
@@ -336,42 +337,52 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
           disabled={locating}
           onClick={() => {
             if (!navigator?.geolocation) {
-              setLocError("GPS nicht verfügbar.");
+              setLocError("GPS/Standort nicht verfügbar in diesem Browser.");
               return;
             }
             setLocating(true);
             setLocError(null);
-            navigator.geolocation.getCurrentPosition(
-              async (pos) => {
-                const { latitude: lat, longitude: lon } = pos.coords;
-                try {
-                  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-                  const data: unknown = await res.json();
-                  // Validate: display_name must be a non-empty string.
-                  // Strip HTML-significant chars to prevent UI injection.
-                  const raw = (data as Record<string, unknown>)?.display_name;
-                  const label =
-                    typeof raw === "string" && raw.length > 0
-                      ? raw.split(",").slice(0, 2).join(",").replace(/[<>'"&]/g, "").trim().slice(0, 200)
-                      : "Mein Standort";
-                  setQuery(label);
-                  onChange(label, lat, lon);
-                } catch {
-                  setQuery("Mein Standort");
-                  onChange("Mein Standort", lat, lon);
-                } finally {
-                  setLocating(false);
-                }
-              },
-              (err) => {
+
+            // Hilfsfunktion: Reverse-Geocode + Input setzen
+            const applyPosition = async (lat: number, lon: number) => {
+              try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+                const data: unknown = await res.json();
+                const raw = (data as Record<string, unknown>)?.display_name;
+                const label =
+                  typeof raw === "string" && raw.length > 0
+                    ? raw.split(",").slice(0, 2).join(",").replace(/[<>'"&]/g, "").trim().slice(0, 200)
+                    : "Mein Standort";
+                setQuery(label);
+                onChange(label, lat, lon);
+              } catch {
+                setQuery("Mein Standort");
+                onChange("Mein Standort", lat, lon);
+              } finally {
                 setLocating(false);
-                if (err.code === err.PERMISSION_DENIED) {
-                  setLocError("Standortzugriff verweigert.");
-                } else {
-                  setLocError("Standort nicht verfügbar.");
-                }
+              }
+            };
+
+            // Erst ohne High-Accuracy (klappt auf Desktop via WLAN/IP),
+            // bei Fehler erneut mit High-Accuracy versuchen (für Mobilgeräte mit GPS)
+            navigator.geolocation.getCurrentPosition(
+              (pos) => void applyPosition(pos.coords.latitude, pos.coords.longitude),
+              () => {
+                // Erster Versuch (IP/WLAN) schlug fehl – nochmal mit GPS
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => void applyPosition(pos.coords.latitude, pos.coords.longitude),
+                  (err) => {
+                    setLocating(false);
+                    if (err.code === err.PERMISSION_DENIED) {
+                      setLocError("Standortzugriff verweigert – bitte in Browser-Einstellungen erlauben.");
+                    } else {
+                      setLocError("Standort nicht ermittelbar. Bitte Adresse manuell eingeben.");
+                    }
+                  },
+                  { timeout: 10000, enableHighAccuracy: true },
+                );
               },
-              { timeout: 8000, enableHighAccuracy: true },
+              { timeout: 5000, enableHighAccuracy: false },
             );
           }}
           className={`shrink-0 transition-colors ${
@@ -382,9 +393,17 @@ function GeoInput({ placeholder, icon, value, onChange }: GeoInputProps) {
         </button>
       </div>
       {locError && (
-        <span className="block mt-1 text-[10px] text-red-400 px-1">
-          {locError}
-        </span>
+        <div className="flex items-center gap-1.5 mt-1 px-1">
+          <span className="text-[10px] text-red-400 flex-1">{locError}</span>
+          <button
+            type="button"
+            onClick={() => setLocError(null)}
+            className="text-red-300 hover:text-red-500 transition-colors shrink-0"
+            aria-label="Fehlermeldung schließen"
+          >
+            <X size={10} />
+          </button>
+        </div>
       )}
       {open && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 z-[900] bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
@@ -412,11 +431,12 @@ type PanelState = "expanded" | "collapsed" | "hidden";
 export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, onNavStop, onChargingStops, onNavActiveChange }: NavigationWizardProps) {
   const [panelState, setPanelState] = useState<PanelState>("expanded");
 
-  // On mobile, start collapsed to avoid covering the map
+  // On mobile, start collapsed only when there is no preset to immediately show
   useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
+    if (typeof window !== "undefined" && window.innerWidth < 768 && !preset) {
       setPanelState("hidden");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // ── Vehicle type (determines OSRM routing profile) ──────────────────────
   type VehicleType = "car" | "scooter" | "escooter" | "foot";
@@ -513,6 +533,8 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
     // If start is "Aktueller Standort" (or fromCoord is null), resolve via live GPS —
     // never rely on pre-stored coordinates (avoids clear-text storage of GPS data).
     if ((preset.fromLabel === "Aktueller Standort" || preset.fromCoord === null) && navigator?.geolocation) {
+      // Show loading immediately so the panel stays visible while GPS resolves
+      setLoading(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const fLat = pos.coords.latitude, fLng = pos.coords.longitude;
@@ -520,12 +542,12 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
           void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
         () => {
-          // GPS failed – use preset coords or Germany centre as last resort
+          // GPS failed – use Germany centre as last resort
           const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
           setFrom({ label: preset.fromLabel, lat: fLat, lng: fLng });
           void calculateWithCoords(fLat, fLng, preset.toCoord[0], preset.toCoord[1]);
         },
-        { timeout: 6000, enableHighAccuracy: true },
+        { timeout: 10000, enableHighAccuracy: true },
       );
     } else {
       const [fLat, fLng] = preset.fromCoord ?? [51.1657, 10.4515];
@@ -594,8 +616,18 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
         setRemainingDist(left);
         setRemainingTime(Math.round(left / 15));
       },
-      (err) => { setError(`GPS: ${err.message}`); stopNavigation(); },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          // Fatal – GPS wird ohne Erlaubnis nie funktionieren
+          setError("GPS: Standortzugriff verweigert. Bitte in den Browser-Einstellungen erlauben.");
+          stopNavigation();
+        } else {
+          // POSITION_UNAVAILABLE (2) oder TIMEOUT (3): vorübergehend, Navigation läuft weiter
+          setError(`GPS-Signal schwach – versuche erneut…`);
+          setTimeout(() => setError((e) => (e?.startsWith("GPS") ? null : e)), 5000);
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },
     );
   }
 
@@ -849,10 +881,10 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
 
         {panelState === "expanded" && (
           <>
-            {/* Inputs (hidden during nav) */}
-            {!isNavActive && (
+            {/* Input-Formular: nur wenn noch keine Route berechnet wurde */}
+            {!isNavActive && !route && (
               <div className="p-3 space-y-2 border-b border-zinc-100 dark:border-zinc-800">
-                {/* Vehicle type selector */}
+                {/* Fahrzeugtyp-Auswahl */}
                 <div className="flex items-center gap-1.5">
                   {VEHICLE_OPTIONS.map((v) => (
                     <button
@@ -879,17 +911,37 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                     {loading ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
                     {loading ? "Wird berechnet…" : "Route berechnen"}
                   </button>
-                  {route && (
-                    <button type="button" onClick={handleClear} className="px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-red-500 hover:border-red-400 transition-colors" title="Löschen">
-                      <X size={13} />
-                    </button>
-                  )}
                 </div>
-                {error && (
-                  <div className="flex items-start gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
-                    <AlertCircle size={13} className="shrink-0 mt-0.5" />{error}
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* Route geplant, Navigation noch nicht gestartet: kompakte Start→Ziel-Zeile */}
+            {!isNavActive && route && (
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 text-xs">
+                <MapPin size={11} className="text-green-500 shrink-0" />
+                <span className="flex-1 truncate text-zinc-600 dark:text-zinc-400 font-medium min-w-0">{from.label || "Start"}</span>
+                <span className="text-zinc-300 dark:text-zinc-600 shrink-0">→</span>
+                <MapPin size={11} className="text-red-500 shrink-0" />
+                <span className="flex-1 truncate text-zinc-600 dark:text-zinc-400 font-medium min-w-0">{to.label || "Ziel"}</span>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="ml-1 p-1 rounded text-zinc-400 hover:text-red-500 transition-colors shrink-0"
+                  title="Route löschen und neu eingeben"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            )}
+
+            {/* Fehleranzeige: sichtbar auch wenn Route bereits existiert */}
+            {error && !isNavActive && (
+              <div className="flex items-start gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 mx-3 my-1.5">
+                <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                <span className="flex-1">{error}</span>
+                <button type="button" onClick={() => setError(null)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
+                  <X size={11} />
+                </button>
               </div>
             )}
 

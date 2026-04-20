@@ -132,16 +132,15 @@ function ExpandableStationRow({
   const router = useRouter();
 
   function handleNavigate() {
-    // Security: Nutzer-GPS wird nicht persistiert; Zielkoordinaten werden nur transient über die URL übergeben.
-    const params = new URLSearchParams({
-      toLat: String(s.lat),
-      toLng: String(s.lng),
-    });
-    const dest = `/${toSafeLocale(locale)}/map?${params.toString()}`;
+    // Security: Nutzer-GPS (fromCoord) wird NICHT persistiert (CWE-312).
+    // Zielkoordinaten (Ladestation) sind öffentliche Daten aus OCM – kein sensitiver Inhalt.
+    // sessionStorage ist flüchtig (Tab-Session) und gilt nicht als persistent storage.
+    const dest = `/${toSafeLocale(locale)}/map`;
     const preset = {
       fromLabel: "Aktueller Standort",
       toLabel: s.title,
       fromCoord: null,
+      toCoord: [s.lat, s.lng] as [number, number],
     };
     try { sessionStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
     router.push(dest);

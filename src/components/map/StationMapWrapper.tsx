@@ -182,19 +182,26 @@ export default function StationMapWrapper() {
   const [showLiveFeed] = useState(prefs.showLiveFeed);
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(() => {
-    if (typeof window === "undefined") return null;
+  const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(null);
+  // Read preset from sessionStorage on mount and trigger NavigationWizard via state change
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     try {
       const raw = sessionStorage.getItem("lk_nav_preset");
       if (raw) {
         sessionStorage.removeItem("lk_nav_preset");
-        return JSON.parse(raw) as NavRoutePreset;
+        const parsed = JSON.parse(raw) as NavRoutePreset;
+        setNavPreset(parsed);
+        // Fly to destination immediately so the user sees the target
+        if (parsed.toCoord) {
+          setFlyToCenter([parsed.toCoord[0], parsed.toCoord[1]]);
+        }
       }
     } catch {
-      // ignore
+      // ignore malformed preset
     }
-    return null;
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [navPosition, setNavPosition] = useState<[number, number, number] | null>(null);
   const [chargingStops, setChargingStops] = useState<PlannedChargingStop[]>([]);
   const [isNavActive, setIsNavActive] = useState(false);
@@ -849,7 +856,11 @@ export default function StationMapWrapper() {
         onPositionUpdate={(pos) => setNavPosition(pos)}
         onNavStop={() => { setNavPosition(null); setIsNavActive(false); }}
         onChargingStops={(stops) => setChargingStops(stops)}
-        onNavActiveChange={(active) => setIsNavActive(active)}
+        onNavActiveChange={(active) => {
+          setIsNavActive(active);
+          // Beim Navigationsstart zur aktuellen GPS-Position zoomen
+          if (active && userLocation) setFlyToCenter([...userLocation]);
+        }}
       />
 
       {/* Newsfeed Banner - cheapest stations within 50km */}
