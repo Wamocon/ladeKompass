@@ -132,8 +132,9 @@ function ExpandableStationRow({
   const router = useRouter();
 
   function handleNavigate() {
-    // Security: GPS-Koordinaten des Nutzers werden NICHT in localStorage gespeichert (CWE-312).
+    // Security: GPS-Koordinaten des Nutzers werden NICHT gespeichert (CWE-312).
     // fromCoord: null → NavigationWizard ruft GPS live im Speicher auf, ohne es zu persistieren.
+    // sessionStorage (nicht localStorage) für toCoord: flüchtig, nicht persistent, kein CWE-312.
     const dest = `/${toSafeLocale(locale)}/map`;
     const preset = {
       fromLabel: "Aktueller Standort",
@@ -141,7 +142,7 @@ function ExpandableStationRow({
       fromCoord: null,
       toCoord: [s.lat, s.lng],
     };
-    try { localStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
+    try { sessionStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
     router.push(dest);
   }
 

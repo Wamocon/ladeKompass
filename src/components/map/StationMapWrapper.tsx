@@ -185,9 +185,9 @@ export default function StationMapWrapper() {
   const [navPreset, setNavPreset] = useState<NavRoutePreset | null>(() => {
     if (typeof window === "undefined") return null;
     try {
-      const raw = localStorage.getItem("lk_nav_preset");
+      const raw = sessionStorage.getItem("lk_nav_preset");
       if (raw) {
-        localStorage.removeItem("lk_nav_preset");
+        sessionStorage.removeItem("lk_nav_preset");
         return JSON.parse(raw) as NavRoutePreset;
       }
     } catch {
