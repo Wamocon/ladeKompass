@@ -132,15 +132,17 @@ function ExpandableStationRow({
   const router = useRouter();
 
   function handleNavigate() {
-    // Security: avoid persisting any coordinates in localStorage/sessionStorage.
-    // Pass only non-sensitive labels in the URL; the map page can resolve
-    // the live origin in-memory when needed.
+    // Security: GPS-Koordinaten des Nutzers werden NICHT in localStorage gespeichert (CWE-312).
+    // fromCoord: null → NavigationWizard ruft GPS live im Speicher auf, ohne es zu persistieren.
     const dest = `/${toSafeLocale(locale)}/map`;
-    const params = new URLSearchParams({
+    const preset = {
       fromLabel: "Aktueller Standort",
       toLabel: s.title,
-    });
-    router.push(`${dest}?${params.toString()}`);
+      fromCoord: null,
+      toCoord: [s.lat, s.lng],
+    };
+    try { localStorage.setItem("lk_nav_preset", JSON.stringify(preset)); } catch { /* ignore */ }
+    router.push(dest);
   }
 
   const statusColor =
