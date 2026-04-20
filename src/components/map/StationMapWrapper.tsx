@@ -233,6 +233,11 @@ export default function StationMapWrapper() {
   }
 
   function handleLocateMe() {
+    // If watchPosition already has a fix, just fly there immediately
+    if (userLocation) {
+      setFlyToCenter(userLocation);
+      return;
+    }
     if (!navigator?.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
@@ -250,7 +255,7 @@ export default function StationMapWrapper() {
           showToast("⚠️ Standort konnte nicht ermittelt werden.");
         }
       },
-      { timeout: 8000, enableHighAccuracy: true },
+      { timeout: 10000, enableHighAccuracy: true },
     );
   }
 

@@ -383,7 +383,7 @@ export function StationMapGL({
         filter: ["!", ["has", "point_count"]],
         paint: {
           "circle-color":        ["get", "color"],
-          "circle-radius":       ["interpolate", ["linear"], ["get", "maxKw"], 0, 12, 50, 16, 150, 22],
+          "circle-radius":       ["interpolate", ["linear"], ["coalesce", ["get", "maxKw"], 0], 0, 12, 50, 16, 150, 22],
           "circle-opacity":      0.40,
           "circle-blur":         1.2,
           "circle-stroke-width": 0,
@@ -400,10 +400,10 @@ export function StationMapGL({
           // Scale icons with zoom level so they remain readable when zoomed in
           "icon-size":          [
             "interpolate", ["exponential", 1.4], ["zoom"],
-            9,  ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.55, 50, 0.70, 150, 0.90],
-            12, ["interpolate", ["linear"], ["get", "maxKw"], 0, 0.90, 50, 1.10, 150, 1.40],
-            15, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.40, 50, 1.70, 150, 2.10],
-            18, ["interpolate", ["linear"], ["get", "maxKw"], 0, 1.90, 50, 2.30, 150, 2.80],
+            9,  ["interpolate", ["linear"], ["coalesce", ["get", "maxKw"], 0], 0, 0.55, 50, 0.70, 150, 0.90],
+            12, ["interpolate", ["linear"], ["coalesce", ["get", "maxKw"], 0], 0, 0.90, 50, 1.10, 150, 1.40],
+            15, ["interpolate", ["linear"], ["coalesce", ["get", "maxKw"], 0], 0, 1.40, 50, 1.70, 150, 2.10],
+            18, ["interpolate", ["linear"], ["coalesce", ["get", "maxKw"], 0], 0, 1.90, 50, 2.30, 150, 2.80],
           ],
           "icon-allow-overlap": true,
           "icon-anchor":        "bottom",
@@ -417,7 +417,7 @@ export function StationMapGL({
         source: SOURCE_ID,
         layout: { visibility: "none" },
         paint: {
-          "heatmap-weight":              ["interpolate", ["linear"], ["get", "maxKw"], 0, 0, 350, 1],
+          "heatmap-weight":              ["interpolate", ["linear"], ["coalesce", ["get", "maxKw"], 0], 0, 0, 350, 1],
           "heatmap-intensity":           ["interpolate", ["linear"], ["zoom"], 0, 1, 14, 3],
           "heatmap-color": [
             "interpolate", ["linear"], ["heatmap-density"],
