@@ -124,42 +124,83 @@ export interface ChargepriceResult {
   currency: string;
 }
 
+// OCM ConnectionTypeID → Chargeprice plug name mapping
+// Format for open_charge_map adapter: "connectionTypeId,currentTypeId"
+// currentTypeId: 10=AC, 20=DC, 30=DC (fast)
+function ocmConnectionToPlug(connectionTypeId: number, powerKw: number): string {
+  // Use the raw OCM IDs as comma-separated — Chargeprice expects "connTypeId,currentTypeId"
+  // For simplicity pass just the connectionTypeId as required by OCM adapter
+  // powerKw helps infer AC vs DC current type
+  const currentTypeId = powerKw >= 22 ? "30" : "10";
+  return `${connectionTypeId},${currentTypeId}`;
+}
+
 /**
- * Calls Chargeprice.app v2 API for a station.
+ * Calls Chargeprice.app v1/charge_prices API for a station.
  * Requires CHARGEPRICE_API_KEY env var.
- * Station is identified by its OCM UUID.
+ * connections format: "connectionTypeId:powerKw;connectionTypeId:powerKw;..."
  */
 export async function fetchChargepriceData(
   ocmUUID: string,
-  _lat: number,
-  _lng: number,
+  lat: number,
+  lng: number,
+  operatorTitle?: string,
+  connections?: string,
 ): Promise<PriceData | null> {
   const key = process.env.CHARGEPRICE_API_KEY;
   if (!key) return null;
 
-  try {
-    // Chargeprice uses JSON:API format
-    const body = {
-      data: {
-        type: "price_request",
-        attributes: {
-          data_adapter_uids: [`ocm_${ocmUUID}`],
+  // Build charge_points from connections string
+  type ChargePoint = { power: number; plug: string };
+  let chargePoints: ChargePoint[] = [];
+  if (connections) {
+    chargePoints = connections
+      .split(";")
+      .map((pair) => {
+        const [typeIdStr, kwStr] = pair.split(":");
+        const typeId = parseInt(typeIdStr, 10);
+        const kw = parseFloat(kwStr);
+        if (!typeId || !kw || !isFinite(kw)) return null;
+        return { power: kw, plug: ocmConnectionToPlug(typeId, kw) };
+      })
+      .filter((cp): cp is ChargePoint => cp !== null)
+      .slice(0, 6); // max 6 charge points
+  }
+
+  // Fallback: generic charge point if none provided
+  if (chargePoints.length === 0) {
+    chargePoints = [{ power: 22, plug: "25,10" }]; // Type 2 AC as fallback
+  }
+
+  const body = {
+    data: {
+      type: "charge_price_request",
+      attributes: {
+        data_adapter: "open_charge_map",
+        station: {
+          longitude: lng,
+          latitude: lat,
+          country: "DE",
+          network: operatorTitle ?? "",
+          charge_points: chargePoints,
+        },
+        options: {
+          energy: 30,
+          duration: 45,
           max_monthly_fees: 0,
-          energy: 40,
-          duration: 60,
-          battery_range: [0.1, 0.8],
-          start_charge_speed: 100,
-          end_charge_speed: 80,
         },
       },
-    };
+    },
+  };
 
-    const res = await fetch("https://api.chargeprice.app/v1/prices", {
+  try {
+    const res = await fetch("https://api.chargeprice.app/v1/charge_prices", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${key}`,
+        "Api-Key": key,
         "Content-Type": "application/json",
-        Accept: "application/json",
+        "Accept": "application/json",
+        "Accept-Language": "de",
       },
       body: JSON.stringify(body),
       next: { revalidate: 900 }, // cache 15 min
@@ -168,42 +209,74 @@ export async function fetchChargepriceData(
     if (!res.ok) return null;
     const json = await res.json();
 
-    const tariffs: ChargepriceResult[] = (json?.data ?? []).slice(0, 5).map(
-      (d: { attributes: { tariff_name?: string; provider?: string; total_monthly_fee?: number; price?: { per_kwh?: number; per_minute?: number; session_fee?: number }; currency?: string } }) => ({
-        tariff_name: d.attributes?.tariff_name ?? "",
-        provider: d.attributes?.provider ?? "",
-        total_monthly_fee: d.attributes?.total_monthly_fee ?? null,
-        price: {
-          per_kwh: d.attributes?.price?.per_kwh ?? null,
-          per_minute: d.attributes?.price?.per_minute ?? null,
-          session_fee: d.attributes?.price?.session_fee ?? null,
-        },
-        currency: d.attributes?.currency ?? "EUR",
-      }),
-    );
+    type RawTariff = {
+      attributes: {
+        provider?: string;
+        tariff_name?: string;
+        total_monthly_fee?: number;
+        currency?: string;
+        charge_point_prices?: Array<{
+          power?: number;
+          plug?: string;
+          price?: number | null;
+          price_distribution?: { kwh?: number; minute?: number; session?: number };
+        }>;
+      };
+    };
 
+    const tariffs = ((json?.data ?? []) as RawTariff[]).slice(0, 10);
     if (tariffs.length === 0) return null;
 
-    // Take cheapest tariff as headline
-    const cheapest = tariffs.reduce((a, b) =>
-      (a.price.per_kwh ?? 99) < (b.price.per_kwh ?? 99) ? a : b,
-    );
+    // Find cheapest by total price across all charge points
+    let cheapestProvider = "";
+    let cheapestTariff = "";
+    let cheapestKwh: number | null = null;
+    let cheapestMin: number | null = null;
+    let cheapestSession: number | null = null;
+    let cheapestCurrency = "EUR";
+    let cheapestTotal = Infinity;
+
+    for (const t of tariffs) {
+      const attr = t.attributes;
+      const cpp = attr.charge_point_prices ?? [];
+      for (const cp of cpp) {
+        const total = cp.price ?? Infinity;
+        if (total < cheapestTotal) {
+          cheapestTotal = total;
+          cheapestProvider = attr.provider ?? "";
+          cheapestTariff = attr.tariff_name ?? "";
+          cheapestCurrency = attr.currency ?? "EUR";
+          // Estimate per-kwh from price distribution
+          const dist = cp.price_distribution ?? {};
+          cheapestKwh = dist.kwh != null && total < Infinity ? +(total * dist.kwh / 30).toFixed(4) : null;
+          cheapestMin = dist.minute != null && total < Infinity ? +(total * dist.minute / 45).toFixed(4) : null;
+          cheapestSession = dist.session != null && total < Infinity ? +(total * dist.session).toFixed(2) : null;
+        }
+      }
+    }
+
+    if (cheapestTotal === Infinity) return null;
 
     const lines: PriceLine[] = [];
-    if (cheapest.price.per_kwh !== null)
-      lines.push({ label: "Energie", amount: cheapest.price.per_kwh, unit: `${cheapest.currency}/kWh` });
-    if (cheapest.price.per_minute !== null)
-      lines.push({ label: "Standzeit", amount: cheapest.price.per_minute, unit: `${cheapest.currency}/min` });
-    if (cheapest.price.session_fee !== null)
-      lines.push({ label: "Sitzungsgebühr", amount: cheapest.price.session_fee, unit: cheapest.currency });
+    if (cheapestKwh !== null && cheapestKwh > 0)
+      lines.push({ label: "Energie", amount: cheapestKwh, unit: `${cheapestCurrency}/kWh` });
+    if (cheapestMin !== null && cheapestMin > 0)
+      lines.push({ label: "Standzeit", amount: cheapestMin, unit: `${cheapestCurrency}/min` });
+    if (cheapestSession !== null && cheapestSession > 0)
+      lines.push({ label: "Sitzungsgebühr", amount: cheapestSession, unit: cheapestCurrency });
+
+    // If no line-items but we have a total, show total per session
+    if (lines.length === 0) {
+      lines.push({ label: "Ladekosten (ca.)", amount: +cheapestTotal.toFixed(2), unit: cheapestCurrency });
+    }
 
     return {
       lines,
       source: "chargeprice",
-      isFree: cheapest.price.per_kwh === 0 && cheapest.price.session_fee === 0,
-      currency: cheapest.currency,
+      isFree: cheapestTotal === 0,
+      currency: cheapestCurrency,
       chargepriceUrl: `https://www.chargeprice.app/?station=${ocmUUID}&source=ocm`,
-      note: `Günstigster Tarif: ${cheapest.provider} ${cheapest.tariff_name}`,
+      note: `Günstigster Tarif: ${cheapestProvider}${cheapestTariff ? ` – ${cheapestTariff}` : ""}`,
     };
   } catch {
     return null;
@@ -241,9 +314,10 @@ export async function getPriceData(
   operatorTitle: string | undefined,
   lat: number,
   lng: number,
+  connections?: string,
 ): Promise<PriceData> {
   // 1. Try Chargeprice.app API
-  const cp = await fetchChargepriceData(ocmUUID, lat, lng);
+  const cp = await fetchChargepriceData(ocmUUID, lat, lng, operatorTitle, connections);
   if (cp) {
     cp.operatorUrl = getOperatorUrl(operatorTitle);
     cp.chargepriceUrl = cp.chargepriceUrl ?? `https://www.chargeprice.app/?q=${encodeURIComponent(operatorTitle ?? "")}`;

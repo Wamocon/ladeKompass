@@ -649,6 +649,15 @@ export function StationMapGL({
       });
       if (found.UsageCost) priceParams.set("usageCost", found.UsageCost);
       if (found.OperatorInfo?.Title) priceParams.set("operator", found.OperatorInfo.Title);
+      // Pass connector data so Chargeprice API can match tariffs
+      if (found.Connections?.length) {
+        // "connectionTypeId:powerKw" pairs, semicolon-separated
+        const connStr = found.Connections
+          .filter((c) => c.ConnectionTypeID && c.PowerKW)
+          .map((c) => `${c.ConnectionTypeID}:${c.PowerKW ?? 0}`)
+          .join(";");
+        if (connStr) priceParams.set("connections", connStr);
+      }
 
       fetch(`/api/prices?${priceParams.toString()}`)
         .then((r) => r.json())

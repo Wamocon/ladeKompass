@@ -242,7 +242,14 @@ export default function StationMapWrapper() {
         setFlyToCenter(loc);
         setLocating(false);
       },
-      () => setLocating(false),
+      (err) => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          showToast("⛔ Standortzugriff verweigert – bitte in den Browser-Einstellungen erlauben.");
+        } else {
+          showToast("⚠️ Standort konnte nicht ermittelt werden.");
+        }
+      },
       { timeout: 8000, enableHighAccuracy: true },
     );
   }

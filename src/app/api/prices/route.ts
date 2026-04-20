@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const stationId  = searchParams.get("stationId");
   const usageCost  = searchParams.get("usageCost") ?? undefined;
   const operator   = searchParams.get("operator") ?? undefined;
+  const connections = searchParams.get("connections") ?? undefined;
   const latStr     = searchParams.get("lat");
   const lngStr     = searchParams.get("lng");
 
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   const lat = latStr ? parseFloat(latStr) : 0;
   const lng = lngStr ? parseFloat(lngStr) : 0;
 
-  const priceData = await getPriceData(stationId, usageCost, operator, lat, lng);
+  const priceData = await getPriceData(stationId, usageCost, operator, lat, lng, connections);
 
   return NextResponse.json(priceData, {
     headers: { "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600" },
