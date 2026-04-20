@@ -597,8 +597,18 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
         setRemainingDist(left);
         setRemainingTime(Math.round(left / 15));
       },
-      (err) => { setError(`GPS: ${err.message}`); stopNavigation(); },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          // Fatal – GPS wird ohne Erlaubnis nie funktionieren
+          setError("GPS: Standortzugriff verweigert. Bitte in den Browser-Einstellungen erlauben.");
+          stopNavigation();
+        } else {
+          // POSITION_UNAVAILABLE (2) oder TIMEOUT (3): vorübergehend, Navigation läuft weiter
+          setError(`GPS-Signal schwach – versuche erneut…`);
+          setTimeout(() => setError((e) => (e?.startsWith("GPS") ? null : e)), 5000);
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },
     );
   }
 
@@ -852,10 +862,10 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
 
         {panelState === "expanded" && (
           <>
-            {/* Inputs (hidden during nav) */}
-            {!isNavActive && (
+            {/* Input-Formular: nur wenn noch keine Route berechnet wurde */}
+            {!isNavActive && !route && (
               <div className="p-3 space-y-2 border-b border-zinc-100 dark:border-zinc-800">
-                {/* Vehicle type selector */}
+                {/* Fahrzeugtyp-Auswahl */}
                 <div className="flex items-center gap-1.5">
                   {VEHICLE_OPTIONS.map((v) => (
                     <button
@@ -882,17 +892,37 @@ export function NavigationWizard({ onRoute, onClear, preset, onPositionUpdate, o
                     {loading ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
                     {loading ? "Wird berechnet…" : "Route berechnen"}
                   </button>
-                  {route && (
-                    <button type="button" onClick={handleClear} className="px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-red-500 hover:border-red-400 transition-colors" title="Löschen">
-                      <X size={13} />
-                    </button>
-                  )}
                 </div>
-                {error && (
-                  <div className="flex items-start gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
-                    <AlertCircle size={13} className="shrink-0 mt-0.5" />{error}
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* Route geplant, Navigation noch nicht gestartet: kompakte Start→Ziel-Zeile */}
+            {!isNavActive && route && (
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 text-xs">
+                <MapPin size={11} className="text-green-500 shrink-0" />
+                <span className="flex-1 truncate text-zinc-600 dark:text-zinc-400 font-medium min-w-0">{from.label || "Start"}</span>
+                <span className="text-zinc-300 dark:text-zinc-600 shrink-0">→</span>
+                <MapPin size={11} className="text-red-500 shrink-0" />
+                <span className="flex-1 truncate text-zinc-600 dark:text-zinc-400 font-medium min-w-0">{to.label || "Ziel"}</span>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="ml-1 p-1 rounded text-zinc-400 hover:text-red-500 transition-colors shrink-0"
+                  title="Route löschen und neu eingeben"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            )}
+
+            {/* Fehleranzeige: sichtbar auch wenn Route bereits existiert */}
+            {error && !isNavActive && (
+              <div className="flex items-start gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 mx-3 my-1.5">
+                <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                <span className="flex-1">{error}</span>
+                <button type="button" onClick={() => setError(null)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
+                  <X size={11} />
+                </button>
               </div>
             )}
 

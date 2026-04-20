@@ -856,7 +856,11 @@ export default function StationMapWrapper() {
         onPositionUpdate={(pos) => setNavPosition(pos)}
         onNavStop={() => { setNavPosition(null); setIsNavActive(false); }}
         onChargingStops={(stops) => setChargingStops(stops)}
-        onNavActiveChange={(active) => setIsNavActive(active)}
+        onNavActiveChange={(active) => {
+          setIsNavActive(active);
+          // Beim Navigationsstart zur aktuellen GPS-Position zoomen
+          if (active && userLocation) setFlyToCenter([...userLocation]);
+        }}
       />
 
       {/* Newsfeed Banner - cheapest stations within 50km */}
