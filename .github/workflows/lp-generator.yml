@@ -30,7 +30,7 @@ jobs:
       # STEP 1: Checkout the current project source
       # We need the README.md and code here so Copilot understands the product context.
       - name: Checkout Project Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1  # Only latest commit needed; full history is not used
 
